@@ -1,0 +1,3 @@
+[submodule "aruco_tool"]
+	path = aruco_tool
+	url = https://github.com/NotCras/aruco_tool.git
