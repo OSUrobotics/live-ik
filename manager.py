@@ -1,6 +1,6 @@
 ## Runs and controls the following:
 
-'''
+''' 
 All are classes 
 
 1) object_tracking - tracks the object
@@ -46,8 +46,14 @@ import matplotlib.animation as animation
 
 class ik_manager:
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
+        self.ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
+                             "aruco_params": cv2.aruco.DetectorParameters_create(),
+                             "marker_side_dims": 0.03,
+                             "opencv_camera_calibration": np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000))),
+                             "opencv_radial_and_tangential_dists": np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
+                             }
+        
         self.img_num = 0
         self.first_corner = []
         self.first_rvec =[]
@@ -55,11 +61,8 @@ class ik_manager:
         self.counter = 1
         self.first_trial = True
         self.current_pos = [0,0,0] #[x,y,rot] in meters and rad
-        self.opencv_camera_calibration = np.array(((591.40261976, 0.00000000, 323.94871535),(0.00000000, 593.59306833, 220.0225822),(0.00000000, 0.00000000, 1.00000000)))
-        self.opencv_radial_and_tangential_dists = np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
 
-        self.arucoDict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
-        self.arucoParams = cv2.aruco.DetectorParameters_create()
+
 
         """
         Old from John's!!!
@@ -71,11 +74,6 @@ class ik_manager:
 
 
         self.marker_side_dims = 0.03  # in meters
-
-        self.af = ArucoFunc(self.opencv_camera_calibration, self.opencv_radial_and_tangential_dists, self.marker_side_dims)  # stores analysis variables, by default provides my attributes
-
-        # Change the path for the configuration file
-        #os.environ["ROS_PYTHON_LOG_CONFIG_FILE"] = "/home/kyle/ik_paper/live-ik/python_loggin.conf"
 
     def start_realsense(self):
         """
@@ -175,10 +173,10 @@ class ik_manager:
 
         orig = cv2.imread(image)
         gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
-        (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.arucoDict,
-            parameters=self.arucoParams)
+        (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
+            parameters=self.ARUCO_PARAMS["aruco_params"])
 
-        rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_side_dims, self.opencv_camera_calibration, self.opencv_radial_and_tangential_dists)
+        rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_side_dims, self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
 
         if self.first_trial:
             # If the first run, save the starting position to use for relative calculations
@@ -385,7 +383,7 @@ class ik_manager:
 
 if __name__ == "__main__":
     #  Create instance of the class
-    ik = ik_manager("yo")
+    ik = ik_manager()
 
     ik.live_tracking()
     #print("img 1")
