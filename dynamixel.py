@@ -1,5 +1,6 @@
 
 from sys import exit as ex
+import numpy as np
 
 class Dxl:
 
@@ -14,10 +15,13 @@ class Dxl:
             self.ADDR_GOAL_POSITION          = 30
             self.LEN_GOAL_POSITION           = 4         # Data Byte Length
             self.ADDR_PRESENT_POSITION       = 37
-            self.LEN_PRESENT_POSITION        = 4         # Data Byte Length
+            self.LEN_PRESENT_POSITION        = 2        # Data Byte Length
             self.DXL_MINIMUM_POSITION_VALUE  = 0         # Refer to the Minimum Position Limit of product eManual
             self.DXL_MAXIMUM_POSITION_VALUE  = 4095      # Refer to the Maximum Position Limit of product eManual
             self.BAUDRATE                    = 57600
+
+            self.CURRENT_TORQUE_INDEX        = 41       # No units - from range 0 to 1023. Technically I have it capped at 950 now tho
+            self.LEN_CURRENT_TORQUE_INDEX    = 1
 
             # Protocol Version 2.0 for the Dynamixel XL-320
             self.PROTOCOL_VERSION            = 2.0
@@ -41,4 +45,8 @@ class Dxl:
         # Set the starting goal position as the calibrated center positions
         self.read_position = calibration[1]
         self.goal_position = calibration[1]
+        self.current_torque = 0
+
+        self.joint_angles_pickle = np.array([])
+
 
