@@ -38,3 +38,7 @@ class Dxl:
         self.TORQUE_DISABLE              = 0                 # Value for disabling the torque
         self.DXL_MOVING_STATUS_THRESHOLD = 1                 # Dynamixel moving status threshold
 
+        # Set the starting goal position as the calibrated center positions
+        self.read_position = calibration[1]
+        self.goal_position = calibration[1]
+
