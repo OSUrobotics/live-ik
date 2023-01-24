@@ -307,7 +307,7 @@ class Aruco_Track:
         dot_p = np.dot(v1_u, v2_u)
         dot_p = min(max(dot_p, -1.0), 1.0)
         return sign * np.arccos(dot_p)
-        
+
     def _unit_vector(self, vector):
         """ Returns the unit vector of the vector.  """
         return vector / np.linalg.norm(vector)
@@ -317,11 +317,11 @@ class Aruco_Track:
 
 if __name__ == "__main__":
     ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000))),
-                        "opencv_radial_and_tangential_dists": np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
-                        }
+                    "aruco_params": cv2.aruco.DetectorParameters_create(),
+                    "marker_side_dims": 0.03,
+                    "opencv_camera_calibration": np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000))),
+                    "opencv_radial_and_tangential_dists": np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
+                    }
     at = Aruco_Track(ARUCO_PARAMS)
     at.start_realsense()
     at.save_frames(False,0.0,True,0.0)

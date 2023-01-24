@@ -234,6 +234,16 @@ class TwoVTwo:
 
 
     def bulk_read_pos(self):
+        """ Check and read current positions from each Dynamixel
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
         self.groupBulkRead.txRxPacket()
 
         # TODO: see if we need checks for each motor here???
@@ -249,13 +259,16 @@ class TwoVTwo:
             self.d3 = self.groupBulkRead.getData(self.DXL3_ID, self.ADDR_PRESENT_POSITION, 2)#self.LEN_PRESENT_POSITION)
             
 
-
-
-
-
-    
     def run(self):
-        # Sends the goal positions to the Dynamixels
+        """ Sends goal positions to all Dynamixels
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
 
         # Allocate goal position value into byte array
         param_goal_position0 = [DXL_LOBYTE(DXL_LOWORD(self.dxl0_goal_position)), DXL_HIBYTE(DXL_LOWORD(self.dxl0_goal_position)), DXL_LOBYTE(DXL_HIWORD(self.dxl0_goal_position)), DXL_HIBYTE(DXL_HIWORD(self.dxl0_goal_position))]
@@ -295,9 +308,6 @@ class TwoVTwo:
 
         # Clear bulkwrite parameter storage
         self.groupBulkWrite.clearParam()
-
-
-
 
     
     def end_program(self):
