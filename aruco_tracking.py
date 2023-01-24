@@ -324,4 +324,4 @@ if __name__ == "__main__":
                     }
     at = Aruco_Track(ARUCO_PARAMS)
     at.start_realsense()
-    at.save_frames(False,0.0,True,0.0)
+    at.save_frames(save=False, save_delay=0.0, live = True, live_delay=0.0)

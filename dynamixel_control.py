@@ -1,82 +1,23 @@
-# Using the DynamixelSDK
-# Kyle DuFrene, January 2023, OSU Robotics
-
-## Must run with Python 3!!
-
-import pickle as pkl
-from math import pi
-import numpy as np
 from dynamixel_sdk import *                    # Uses Dynamixel SDK library   
+import dynamixel
 from time import sleep
-import ctypes
 import os
+import pickle as pkl
+import numpy as np
+from math import pi
+from pathlib import Path
 
-class TwoVTwo:
+# TODO: tune PID https://www.youtube.com/watch?v=msWlMyx8Nrw&ab_channel=ROBOTISOpenSourceTeam
+
+class Dynamixel:
+
     def __init__(self): 
-        # 2v2 position variables   
-        self.dy_0_pos = 460#488
-        #self.dy_0_limits = [412, 37] 
-        self.dy_1_pos = 450
-        #self.dy_1_limits = [932, 247]
-        self.dy_2_pos = 490#468
-        #self.dy_2_limits = [619, 1023]      
-        self.dy_3_pos = 515
-        #self.dy_3_limits = [0, 657] 
+        self.DEVICENAME = '/dev/ttyUSB0'
+        self.PROTOCOL_VERSION = 2.0
+        self.BAUDRATE = 57600
 
-        self.d0 = 0
-        self.d1 = 0
-        self.d2 = 0
-        self.d3 = 0
-
-        # Table values that corespond to the Dynamixel XL-320
-        self.ADDR_TORQUE_ENABLE          = 24
-        self.ADDR_LED_RED                = 65
-        self.LEN_LED_RED                 = 1         # Data Byte Length
-        self.ADDR_GOAL_POSITION          = 30
-        self.LEN_GOAL_POSITION           = 4         # Data Byte Length
-        self.ADDR_PRESENT_POSITION       = 37
-        self.LEN_PRESENT_POSITION        = 4         # Data Byte Length
-        self.DXL_MINIMUM_POSITION_VALUE  = 0         # Refer to the Minimum Position Limit of product eManual
-        self.DXL_MAXIMUM_POSITION_VALUE  = 4095      # Refer to the Maximum Position Limit of product eManual
-        self.BAUDRATE                    = 57600
-
-        # Protocol Version 2.0 for the Dynamixel XL-320
-        self.PROTOCOL_VERSION            = 2.0
-
-        # Make sure that each DYNAMIXEL ID should have unique ID.
-        self.DXL0_ID                     = 0                 # Dynamixel#1 ID : 0
-        self.DXL1_ID                     = 1                 # Dynamixel#1 ID : 1
-        self.DXL2_ID                     = 2                 # Dynamixel#1 ID : 2
-        self.DXL3_ID                     = 3                 # Dynamixel#1 ID : 3
-
-        # Verify this!!
-        self.DEVICENAME                  = '/dev/ttyUSB0'
-
-        self.TORQUE_ENABLE               = 1                 # Value for enabling the torque
-        self.TORQUE_DISABLE              = 0                 # Value for disabling the torque
-        self.DXL_MOVING_STATUS_THRESHOLD = 1                 # Dynamixel moving status threshold
-
-        self.index = 0
-        self.dxl0_goal_position = self.dy_0_pos
-        self.dxl1_goal_position = self.dy_1_pos  
-        self.dxl2_goal_position = self.dy_2_pos   
-        self.dxl3_goal_position = self.dy_3_pos 
-        self.dxl_led_value = [0x00, 0x01]      
-        self.control_val_0 = 63
-        self.control_val_1 = 63        
-        self.control_val_2 = 63
-        self.control_val_3 = 63                                         # Dynamixel LED value for write
-
-        self.j0 = []
-        self.j1 = []
-        self.j2 = []
-        self.j3 = []
-        
-
-        # Initialize PortHandler instance
-        # Set the port path
-        # Get methods and members of PortHandlerLinux or PortHandlerWindows
         self.portHandler = PortHandler(self.DEVICENAME)
+        
 
         # Initialize PacketHandler instance
         # Set the protocol version
@@ -102,72 +43,237 @@ class TwoVTwo:
         else:
             print("Failed to change the baudrate")
             quit()
-	
 
-        # Enable Dynamixel#0 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL0_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
+        # Create a dictionary of each Dynamixel object
+        # key: id_number; value: Dxl object
+        self.dxls = {}
+            
+    def create_dynamixel_dict(self, type = "XL-320", ID_number = 0, calibration = [0, 511, 1023]) -> dict:
+        """ Takes in parameters and creates a dictionary for the dynamixel.
+
+        Args:
+            type (string): Dynamixel type (model)
+                (default is "XL-320")
+            ID_number (int): Dynamixel ID number
+                (default is 0)
+            calibration (list of ints): List containing the minimum, center, and max positions of that joint (Dynamixel) 
+                (default is [0, 511, 1023])
+        Returns:
+            dynamixel_dict (dict): Dictionary containing all of the parameters
+        """
+        dynamixel_dict = {"type": type,
+                          "ID_number": ID_number,
+                          "calibration": calibration}
+        return dynamixel_dict
+
+    def add_dynamixel(self, dyn_dict):
+        """ Creates a Dxl bject and adds it to our dictionary based on the parameters passed in.
+
+        Args:
+            dyn_dict (dict): Dictionary of relavent Dynamixel settings
+        Returns:
+            none
+        """
+        
+        # Get the ID number for easy reference
+        id_num = dyn_dict["ID_number"]
+
+        # Create a Dxl object and add it to our dictionary
+        self.dxls[id_num] = dynamixel.Dxl(dyn_dict)
+
+    def enable_torque(self, id: int, enable: bool = True):
+        """ Enables or disables torque for one Dynamixel.
+
+        Args:
+            id (int): ID number of Dynamixel
+            enable (boot): Enable torque (True) or disable torque (False)
+                (default is True)
+        Returns:
+            none
+        """
+
+        # Choose enable or disable value
+        if enable:
+            enable_value = self.dxls[id].TORQUE_ENABLE
+        else: 
+            enable_value = self.dxls[id].TORQUE_DISABLE
+
+        # Enable Dynamixel Torque
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, id, self.dxls[id].ADDR_TORQUE_ENABLE, enable_value)
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
         elif dxl_error != 0:
             print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-        else:
-            print("Dynamixel#%d has been successfully connected" % self.DXL0_ID)
+        elif enable:
+            print("Dynamixel#%d has been successfully connected" % id)
+
+    '''
+    def setup_parameters(self, id: int, position = True, torque = True):
+        """ Sets up the parameters to read position
+
+        Args:
+            id (int): ID number of Dynamixel
+            position (bool): Whether to set up a position parameter
+            torque (bool): Whether to set up a torque parameter
+        Returns:
+            none
+        """
+        if position:
+            # Add parameter storage for Dynamixel present position
+            dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkRead addparam failed" % id)
+                quit()
+    '''
 
 
-        # Enable Dynamixel#1 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL1_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
+
+    def setup_all(self):
+        """ "Starts" all Dynamixels - this enables the torque and sets up the position parameter
+
+        Args:
+            none
+        Returns:
+            none
+        """
+
+        #  Enable torque for all Dyanmixels
+        for id in self.dxls.keys():
+            self.enable_torque(id, True)
+        
+        # Setup position parameter for all Dynamixels
+        ##for id in self.dxls.keys():
+         #   self.setup_parameters(id)
+
+    def bulk_read_pos(self):
+        """ Check and read current positions from each Dynamixel
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
+        self.groupBulkRead.txRxPacket()
+
+        # TODO: see if we need checks for each motor here??
+
+        # Must set to 2 bytes otherwise errors!!
+        for id in self.dxls.keys():
+            # Add parameter storage for Dynamixel present position
+            dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkRead addparam failed" % id)
+                quit()
+        self.groupBulkRead.txRxPacket()
+
+        for id in self.dxls.keys():
+
+            # Saves position read in each Dxl object
+            self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            #print(f"Current pos: {self.dxls[id].read_position}")
+
+        self.groupBulkRead.clearParam()
+    
+    def get_position(self, id: int):
+        return self.dxls[id].read_position
+
+
+    def bulk_read_torque(self):
+        """ Check and read current positions from each Dynamixel
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
+        # TODO: not sure if this is actually working...
+        for id in self.dxls.keys():
+            # Add parameter storage for Dynamixel present position
+            dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].CURRENT_TORQUE_INDEX, self.dxls[id].LEN_CURRENT_TORQUE_INDEX)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkRead addparam failed" % id)
+                quit()
+        
+        self.groupBulkRead.txRxPacket()
+        
+        for id in self.dxls.keys():
+
+            # Saves torque read in each object
+            self.dxls[id].current_torque = self.groupBulkRead.getData(id, self.dxls[id].CURRENT_TORQUE_INDEX, self.dxls[id].LEN_CURRENT_TORQUE_INDEX)
+            #print(f"Current torque: {self.dxls[id].current_torque}")
+            
+        self.groupBulkRead.clearParam()
+
+
+    def send_goal(self):
+        """ Writes goal positions to all Dynamixels based on goal position stored in each Dxl object.
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
+        # Loop through all Dxls
+        for id in self.dxls.keys():
+            dxl = self.dxls[id]
+            param_goal_position = [DXL_LOBYTE(DXL_LOWORD(dxl.goal_position)), DXL_HIBYTE(DXL_LOWORD(dxl.goal_position)), DXL_LOBYTE(DXL_HIWORD(dxl.goal_position)), DXL_HIBYTE(DXL_HIWORD(dxl.goal_position))]
+            # Add Dynamixel goal position value to the Bulkwrite parameter storage
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_GOAL_POSITION, dxl.LEN_GOAL_POSITION, param_goal_position)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkWrite addparam failed" % id)
+                quit()
+        
+        # Bulkwrite goal position and LED value
+        # TODO: Add LED value stuff at some point if we want??
+        dxl_comm_result = self.groupBulkWrite.txPacket()
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-        else:
-            print("Dynamixel#%d has been successfully connected" % self.DXL1_ID)
 
-        # Enable Dynamixel#2 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL2_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-        else:
-            print("Dynamixel#%d has been successfully connected" % self.DXL2_ID)
+        # Clear bulkwrite parameter storage
+        self.groupBulkWrite.clearParam()
+    
+    def update_goal(self, id: int, new_goal: int):
+        """ Updates the goal position stored in the object for 1 dynamixel
 
-        # Enable Dynamixel#3 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL3_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_ENABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-        else:
-            print("Dynamixel#%d has been successfully connected" % self.DXL3_ID)
+        Args:
+            id (int): ID number of Dynamixel to update
+            new_goal (int): New goal position from 0 to 1023
+        Returns:
+            none
+        
+        """
+        self.dxls[id].goal_position = new_goal
 
         
-        # Add parameter storage for Dynamixel#0 present position
-        dxl_addparam_result = self.groupBulkRead.addParam(self.DXL0_ID, self.ADDR_PRESENT_POSITION, self.LEN_PRESENT_POSITION)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkRead addparam failed" % self.DXL0_ID)
-            quit()
+    def end_program(self):
+        """ Turns off Dynamixel torque and closes the port. Run this upone exit/program end.
 
-        # Add parameter storage for Dynamixel#1 present position
-        dxl_addparam_result = self.groupBulkRead.addParam(self.DXL1_ID, self.ADDR_PRESENT_POSITION, self.LEN_PRESENT_POSITION)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkRead addparam failed" % self.DXL1_ID)
-            quit()
+        Args:
+            none
+        Returns:
+            none
+        
+        """
 
-        # Add parameter storage for Dynamixel#2 present position
-        dxl_addparam_result = self.groupBulkRead.addParam(self.DXL2_ID, self.ADDR_PRESENT_POSITION, self.LEN_PRESENT_POSITION)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkRead addparam failed" % self.DXL2_ID)
-            quit()
+        # Clear bulkread parameter storage
+        self.groupBulkRead.clearParam()
 
-        # Add parameter storage for Dynamixel#3 present position
-        dxl_addparam_result = self.groupBulkRead.addParam(self.DXL3_ID, self.ADDR_PRESENT_POSITION, self.LEN_PRESENT_POSITION)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkRead addparam failed" % self.DXL3_ID)
-            quit()
-    
+        # Disable torque
+        for id in self.dxls.keys():
+            self.enable_torque(id, False)
 
-    def replay_from_pickle(self, file_location="/Open_Loop_Data", file_name="angles_N.pkl"):
+        self.portHandler.closePort()  
+
+    def load_pickle(self, file_location="Open_Loop_Data", file_name="angles_N.pkl") -> int:
         """ Open and load in the radian values (relative positions) from the pickle file. Convert them to positions from 0 to 1023 (how the Dynamixel XL-320 uses them). Updates the joint angles lists.
 
         Args:
@@ -180,26 +286,25 @@ class TwoVTwo:
             none
         """
 
-        if file_location != "/Open_Loop_Data":
-            path = os.path.join(os.getcwd(), file_location, file_name)
-        else:
-            path = os.path.join(file_location, file_name)
-
-        with open(path, 'rb') as f:
+        path_to = os.path.abspath(os.path.dirname(__file__))
+        file_path = os.path.join(path_to, file_location, file_name)
+    
+        with open(file_path, 'rb') as f:
             data = pkl.load(f)
-        
-        self.j0 = self.convert_rad_to_pos(data["joint_1"])
-        self.j1 = self.convert_rad_to_pos(data["joint_2"])
-        self.j2 = self.convert_rad_to_pos(data["joint_3"])
-        self.j3 = self.convert_rad_to_pos(data["joint_4"])
+
+        for id in self.dxls.keys():
+            name = "joint_" + str(id+1)
+            self.dxls[id].joint_angles_pickle = self.convert_rad_to_pos(data[name])
+
+        pickle_length = len(self.dxls[id].joint_angles_pickle)
+
+        return pickle_length
 
     def convert_rad_to_pos(self, rad: float) -> int:
         """ Converts from radians to positions from 0 to 1023.
 
         Args:
             rad (float): Position value in radians
-                (default is "/Open_Loop_Data")
-
         Returns:
             pos (int): Position in range of 0 to 1023
         """
@@ -215,162 +320,49 @@ class TwoVTwo:
 
         return pos
 
+
     def map_pickle(self, i: int):
         """ Convert from relative to absolute positions based on the calibration. Updates global goal position variable.
 
         Args:
             i (int): Index of the list to convert
-        
         Returns:
             none
-        
         """
 
         # Set the positions in terms of actual calibrated motor positions
-        self.dxl0_goal_position = self.dy_0_pos - self.j0[i]
-        self.dxl1_goal_position = self.dy_1_pos - self.j1[i]
-        self.dxl2_goal_position = self.dy_2_pos - self.j2[i]
-        self.dxl3_goal_position = self.dy_3_pos - self.j3[i]
+        for id in self.dxls.keys():
+            self.dxls[id].goal_position = self.dxls[id].center_pos - self.dxls[id].joint_angles_pickle[i]
 
 
-    def bulk_read_pos(self):
-        """ Check and read current positions from each Dynamixel
-
-        Args:
-            none
+    def replay_pickle_data(self, file_location="Open_Loop_Data", file_name="angles_N.pkl", delay_between_steps: float = .01):
         
-        Returns:
-            none
-        
-        """
+        try:    
+            pickle_length = self.load_pickle("Open_Loop_Data", "angles_N.pkl")
+            self.map_pickle(0)
+            self.send_goal()
+            input("Press Enter to continue to next step.")
+            for i in range(pickle_length):
+                self.map_pickle(i)
+                self.send_goal()
+                sleep(delay_between_steps)
+                self.bulk_read_pos()
 
-        self.groupBulkRead.txRxPacket()
+        except KeyboardInterrupt:
+                self.end_program()
 
-        # TODO: see if we need checks for each motor here???
-        dxl_getdata_result = ctypes.c_ubyte(self.groupBulkRead.isAvailable(self.DXL0_ID, self.ADDR_PRESENT_POSITION, self.LEN_PRESENT_POSITION)).value
-        if dxl_getdata_result != 1:
-            print("Unable to retrieve positions")
-            return
-        else: 
-            # Must set to 2 bytes otherwise errors!!
-            self.d0 = self.groupBulkRead.getData(self.DXL0_ID, self.ADDR_PRESENT_POSITION, 2)#self.LEN_PRESENT_POSITION)
-            self.d1 = self.groupBulkRead.getData(self.DXL1_ID, self.ADDR_PRESENT_POSITION, 2)#self.LEN_PRESENT_POSITION)
-            self.d2 = self.groupBulkRead.getData(self.DXL2_ID, self.ADDR_PRESENT_POSITION, 2)#self.LEN_PRESENT_POSITION)
-            self.d3 = self.groupBulkRead.getData(self.DXL3_ID, self.ADDR_PRESENT_POSITION, 2)#self.LEN_PRESENT_POSITION)
-            
 
-    def run(self):
-        """ Sends goal positions to all Dynamixels
 
-        Args:
-            none
-        
-        Returns:
-            none
-        
-        """
+if __name__ == "__main__":
+    Dynamixel_control = Dynamixel()
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 460, 1023]))
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 450, 1023]))
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 490, 1023]))
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 515, 1023]))
 
-        # Allocate goal position value into byte array
-        param_goal_position0 = [DXL_LOBYTE(DXL_LOWORD(self.dxl0_goal_position)), DXL_HIBYTE(DXL_LOWORD(self.dxl0_goal_position)), DXL_LOBYTE(DXL_HIWORD(self.dxl0_goal_position)), DXL_HIBYTE(DXL_HIWORD(self.dxl0_goal_position))]
-        param_goal_position1 = [DXL_LOBYTE(DXL_LOWORD(self.dxl1_goal_position)), DXL_HIBYTE(DXL_LOWORD(self.dxl1_goal_position)), DXL_LOBYTE(DXL_HIWORD(self.dxl1_goal_position)), DXL_HIBYTE(DXL_HIWORD(self.dxl1_goal_position))]
-        param_goal_position2 = [DXL_LOBYTE(DXL_LOWORD(self.dxl2_goal_position)), DXL_HIBYTE(DXL_LOWORD(self.dxl2_goal_position)), DXL_LOBYTE(DXL_HIWORD(self.dxl2_goal_position)), DXL_HIBYTE(DXL_HIWORD(self.dxl2_goal_position))]
-        param_goal_position3 = [DXL_LOBYTE(DXL_LOWORD(self.dxl3_goal_position)), DXL_HIBYTE(DXL_LOWORD(self.dxl3_goal_position)), DXL_LOBYTE(DXL_HIWORD(self.dxl3_goal_position)), DXL_HIBYTE(DXL_HIWORD(self.dxl3_goal_position))]
-        
-        # Add Dynamixel#0 goal position value to the Bulkwrite parameter storage
-        dxl_addparam_result = self.groupBulkWrite.addParam(self.DXL0_ID, self.ADDR_GOAL_POSITION, self.LEN_GOAL_POSITION, param_goal_position0)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkWrite addparam failed" % self.DXL0_ID)
-            quit()
-        
-        # Add Dynamixel#1 goal position value to the Bulkwrite parameter storage
-        dxl_addparam_result = self.groupBulkWrite.addParam(self.DXL1_ID, self.ADDR_GOAL_POSITION, self.LEN_GOAL_POSITION, param_goal_position1)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkWrite addparam failed" % self.DXL1_ID)
-            quit()
 
-        # Add Dynamixel#2 goal position value to the Bulkwrite parameter storage
-        dxl_addparam_result = self.groupBulkWrite.addParam(self.DXL2_ID, self.ADDR_GOAL_POSITION, self.LEN_GOAL_POSITION, param_goal_position2)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkWrite addparam failed" % self.DXL2_ID)
-            quit()
 
-        # Add Dynamixel#3 goal position value to the Bulkwrite parameter storage
-        dxl_addparam_result = self.groupBulkWrite.addParam(self.DXL3_ID, self.ADDR_GOAL_POSITION, self.LEN_GOAL_POSITION, param_goal_position3)
-        if dxl_addparam_result != True:
-            print("[ID:%03d] groupBulkWrite addparam failed" % self.DXL3_ID)
-            quit()
-
-        
-        # Bulkwrite goal position and LED value
-        dxl_comm_result = self.groupBulkWrite.txPacket()
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-
-        # Clear bulkwrite parameter storage
-        self.groupBulkWrite.clearParam()
+    Dynamixel_control.setup_all()
+    Dynamixel_control.replay_pickle_data(file_name="angles_N.pkl", delay_between_steps = .01)
 
     
-    def end_program(self):
-        ###### This code runs upon exit ######
-
-        # Clear bulkread parameter storage
-        self.groupBulkRead.clearParam()
-
-        # Disable Dynamixel#0 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL0_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        # Disable Dynamixel#1 Torque        # Add Dynamixel#3 goal position value to the Bulkwrite parameter storage
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL1_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        # Disable Dynamixel#2 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL2_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        # Disable Dynamixel#3 Torque
-        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, self.DXL3_ID, self.ADDR_TORQUE_ENABLE, self.TORQUE_DISABLE)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-
-        #self.portHandler.closePort()   
-
-
-
-if __name__== "__main__":
-    hand2v2 = TwoVTwo()    
-    
-    try:
-        hand2v2.get_pickle_data()
-        hand2v2.map_pickle(0)
-        print("0: " + str(hand2v2.dxl0_goal_position) + "  1: " + str(hand2v2.dxl1_goal_position) + "  2: " + str(hand2v2.dxl2_goal_position) + "  3: " + str(hand2v2.dxl3_goal_position))
-        hand2v2.run()
-        input("Press Enter to continue to next step. Step num: " + str(0) + "/" + str(len(hand2v2.j1)))
-        hand2v2.bulk_read_pos()
-        for i in range(len(hand2v2.j1)):
-            #input("Press Enter to continue to next step. Step num: " + str(i) + "/" + str(len(hand2v2.j1)))
-            hand2v2.map_pickle(i)
-            print("0: " + str(hand2v2.dxl0_goal_position) + "  1: " + str(hand2v2.dxl1_goal_position) + "  2: " + str(hand2v2.dxl2_goal_position) + "  3: " + str(hand2v2.dxl3_goal_position))
-            hand2v2.run()
-            sleep(.01)
-            
-            # compare actual position to desired position
-            hand2v2.bulk_read_pos()
-            print(f"Goal: {hand2v2.dxl0_goal_position}, Actual {hand2v2.d0}")
-
-    except KeyboardInterrupt:
-        hand2v2.end_program()
-        
-
-    hand2v2.end_program()
