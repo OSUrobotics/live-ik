@@ -7,6 +7,9 @@ from sys import exit as ex
 import numpy as np
 from time import time, sleep
 import threading
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import math
 
 
 class Aruco_Track:
@@ -34,6 +37,10 @@ class Aruco_Track:
         self.first_tvec = []
         self.first_rvec = []
         self.first_corner = []
+
+        self.current_pos = [0,0,0] #[x,y,rot] in meters and rad
+
+        self.event = threading.Event()
 
 
     def start_realsense(self):
@@ -143,6 +150,8 @@ class Aruco_Track:
 
         try:
             while True:
+                if self.event.is_set():
+                    break
                 # Wait for a coherent pair of frames: depth and color
                 frames = self.pipe.wait_for_frames()
                 color_frame = frames.get_color_frame()
@@ -159,18 +168,27 @@ class Aruco_Track:
                         file_name = "hand:"+str(hand)+"_dir:"+str(direction)+"_trial:"+str(trial)+"_frame:"+str(img_num)+".jpg"
                         img_num += 1
                         cv2.imwrite(file_name, color_image)
+                        prev_save_time = time()
                 
                 if live:
                     if (time() - prev_save_live_time) > live_delay:
                         # Save if enabled and enough time has elapsed
                         # Update live image
                         self.live_thread(color_image)  # Start aruco analysis in another thread
-                        break
+                        prev_save_live_time = time()
+                        #break
             
         finally:
 
             # Stop streaming
+            print("Stopping RealSense pipeline")
             self.pipe.stop()
+            print("RealSense pipeline stopped")
+
+    def start_save_frames_thread(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1):
+        save_frame = threading.Thread(target=self.save_frames, args=(save, save_delay, live, live_delay, drive, folder, hand, direction, trial,), daemon=True)
+        save_frame.start()
+
 
     def live_thread(self, color_image):
         """Starts the live_tracking_analysis function (finding Aruco markers) in another thread 
@@ -181,7 +199,6 @@ class Aruco_Track:
         Returns:
             none
         """
-
         x = threading.Thread(target=self.live_tracking_analysis, args=(color_image,), daemon=True)
         x.start()
 
@@ -203,17 +220,63 @@ class Aruco_Track:
         rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.ARUCO_PARAMS["marker_side_dims"], self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
 
         if self.first_trial:
-            # If the first run, save the starting position to use for relative calculations
-            self.first_trial = False
+            if rvec is None:
+                print("No Aruco marker in the first frame!!")
+            else:
+                # If the first run, save the starting position to use for relative calculations
+                self.first_trial = False
 
-            self.first_corner = corners
-            self.first_rvec = rvec
-            self.first_tvec = tvec
+                self.first_corner = corners
+                self.first_rvec = rvec
+                self.first_tvec = tvec
         else:
             # Save the relative position position
             self.current_pos = self.calc_poses(corners, rvec, tvec)
+            #y = threading.Thread(target=self.fun_things, args=(), daemon=True)
+            #y.start()
+        
+
+        
+
+    #def fun_things(self):
+    #    print("hi")
+    #    sleep(1)
+    #    print("ho")
+
+    def live_plotting(self):
+        fig, ax = plt.subplots(figsize=(15, 12))
+        # set the axes limits
+        ax.axis([-.2,.2,-.2,.2])
+        ax.set_title("Relative Position in mm")
+        # set equal aspect such that the circle is not shown as ellipse
+        ax.set_aspect("equal")
+        # create a point in the axes
+        point, = ax.plot(0,0, marker=(4, 0, 0), markersize=20)
+
+        # Updating function, to be repeatedly called by the animation
+        def update(phi):
+            # obtain point coordinates 
+            # set point's coordinates
+            print(self.current_pos)
+            point.set_data([self.current_pos[0]],[self.current_pos[1]])
+            point.set_marker((4, 0, math.degrees(self.current_pos[2])+45.0))
+            point.set_markersize(50)
+            return point,
+
+        
+        ani = animation.FuncAnimation(fig, update, interval=10)
+ 
+        plt.show()
+
+        # TODO: figure out these exceptions
+        self.event.set()
+    
+    def live_plotting_thread(self):
+        z = threading.Thread(target=self.live_plotting, args=(), daemon=True)
+        z.start()
 
 
+        
 
     def calc_poses(self, corners, next_rvec, next_tvec):
         """
@@ -323,5 +386,8 @@ if __name__ == "__main__":
                     "opencv_radial_and_tangential_dists": np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
                     }
     at = Aruco_Track(ARUCO_PARAMS)
-    at.start_realsense()
-    at.save_frames(save=False, save_delay=0.0, live = True, live_delay=0.0)
+    try:
+        at.start_realsense()
+        at.save_frames(save=False, save_delay=0.0, live = True, live_delay=1.5) # was 0
+    finally: 
+        at.event.set()

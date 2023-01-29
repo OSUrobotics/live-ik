@@ -339,9 +339,9 @@ class Dynamixel:
         
         try:    
             pickle_length = self.load_pickle("Open_Loop_Data", "angles_N.pkl")
-            self.map_pickle(0)
-            self.send_goal()
-            input("Press Enter to continue to next step.")
+            #self.map_pickle(0)
+            #self.send_goal()
+            #input("Press Enter to continue to next step.")
             for i in range(pickle_length):
                 self.map_pickle(i)
                 self.send_goal()
@@ -349,7 +349,17 @@ class Dynamixel:
                 self.bulk_read_pos()
 
         except KeyboardInterrupt:
-                self.end_program()
+            self.end_program()
+
+    def go_to_initial_position(self, file_location="Open_Loop_Data", file_name="angles_N.pkl"):
+        try: 
+            pickle_length = self.load_pickle("Open_Loop_Data", "angles_N.pkl")
+            self.map_pickle(0)
+            self.send_goal()
+        except:
+            self.end_program()
+
+
 
 
 

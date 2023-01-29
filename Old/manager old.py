@@ -219,7 +219,7 @@ class ik_manager:
         point, = ax.plot(0,0, marker=(4, 0, 0), markersize=20)
 
         # Updating function, to be repeatedly called by the animation
-        def update(phi):
+        def update():
             # obtain point coordinates 
             # set point's coordinates
             print(self.current_pos)
