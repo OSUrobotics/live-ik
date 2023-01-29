@@ -7,7 +7,17 @@ import dynamixel_control
 class ik_manager:
 
     def __init__(self):
+        self.get_user_params()
         pass
+
+    def get_user_params(self):
+        user_in = input("Enter 'o' for Open Loop, 'c' for closed loop")
+        if user_in == 'o':
+            pass
+        elif user_in == 'c':
+            pass
+        else:
+            print('Invalid input, please try again!')
 
     def open_loop(self, dyn_file_location="Open_Loop_Data", dyn_file_name="angles_N.pkl"):
         ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
