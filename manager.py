@@ -7,7 +7,7 @@ import dynamixel_control
 class ik_manager:
 
     def __init__(self):
-        self.get_user_params()
+        #self.get_user_params()
         pass
 
     def get_user_params(self):
@@ -63,7 +63,19 @@ class ik_manager:
     def dyn_replay(self, dyn_file_location, dyn_file_name):
         self.Dynamixel_control.replay_pickle_data(dyn_file_location, dyn_file_name, delay_between_steps = .01)
 
+    def save_one_image(self, file = "test.jpg"):
+        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
+                        "aruco_params": cv2.aruco.DetectorParameters_create(),
+                        "marker_side_dims": 0.03,
+                        "opencv_camera_calibration": np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000))),
+                        "opencv_radial_and_tangential_dists": np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
+                        }
+        at = aruco.Aruco_Track(ARUCO_PARAMS)
+        at.save_one_image(file)
+
+
 
 if __name__ == "__main__":
     manager = ik_manager()
-    manager.open_loop()
+    manager.save_one_image()
+    #manager.open_loop()

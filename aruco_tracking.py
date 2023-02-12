@@ -375,6 +375,21 @@ class Aruco_Track:
         """ Returns the unit vector of the vector.  """
         return vector / np.linalg.norm(vector)
 
+    def save_one_image(self, file_name = "test.jpg"):
+        self.start_realsense()
+        while True:
+            # Wait for a coherent pair of frames: depth and color
+            frames = self.pipe.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            if not color_frame:
+                continue
+                
+            # Convert images to numpy arrays
+            color_image = np.asanyarray(color_frame.get_data())
+            cv2.imwrite(file_name, color_image)
+            break
+
+        self.pipe.stop()
 
 
 
