@@ -49,4 +49,7 @@ class Dxl:
 
         self.joint_angles_pickle = np.array([])
 
+        # Add a value shift to account for applying force
+        self.shift = dxl_dict["shift"]
+
 

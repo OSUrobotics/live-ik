@@ -4,12 +4,14 @@ import cv2
 import pyrealsense2 as rs
 import os
 from sys import exit as ex
+import sys
 import numpy as np
 from time import time, sleep
 import threading
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import math
+from contour_find import ContourFind
 
 
 class Aruco_Track:
@@ -42,6 +44,17 @@ class Aruco_Track:
 
         self.event = threading.Event()
 
+        self.finger_1 = np.array([[0.0, 0.0], [0.0, 0.0]])
+        self.finger_2 = np.array([[0.0, 0.0], [0.0, 0.0]])
+
+        self.contact = False
+        self.updated = False
+
+        self.contour = ContourFind()
+
+
+        self.fing_1_contact = [None, None]
+        self.fing_2_contact = [None, None]
 
     def start_realsense(self):
         """
@@ -77,8 +90,34 @@ class Aruco_Track:
         # Start streaming
         profile = self.pipe.start(self.config)
 
+        align_to = rs.stream.color
+        self.align = rs.align(align_to)
 
-    def save_frames(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1):
+        # Create pointcloud object
+        self.pc = rs.pointcloud()
+
+        # Wait until we verify we recieve the first frames, if not perform reset
+        try:
+            frames = self.pipe.wait_for_frames()
+        except:
+            print("No frames recieved within 5 seconds, performing reset")
+            ctx = rs.context()
+            devices = ctx.query_devices()
+            for dev in devices:
+                dev.hardware_reset()
+            
+            sleep(5)
+            try:
+                print("Trying again")
+                frames = self.pipe.wait_for_frames()
+            except:
+                ex("Check Realsense - unable to recieve frames")
+
+                
+
+
+
+    def save_frames(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1, contact = True):
         """Get the color frames from the RealSense and save them to the the provided folder. To be used with post-processing, Asterisk analysis, and live IK.
 
         Args:
@@ -106,6 +145,9 @@ class Aruco_Track:
         """
 
         # TODO: Decide how to call image processing once this is updated??
+
+        if contact:
+            self.contact = True
 
         prev_save_time = time()
         prev_save_live_time = time()
@@ -148,18 +190,50 @@ class Aruco_Track:
 
         img_num = 0 # Counter for saving images
 
+        #if contact:
+        #    contour = ContourFind()
+
         try:
             while True:
                 if self.event.is_set():
+                    # If we say to kill the thread from the main thread, do it
+                    print("broken")
                     break
+
                 # Wait for a coherent pair of frames: depth and color
                 frames = self.pipe.wait_for_frames()
-                color_frame = frames.get_color_frame()
-                if not color_frame:
-                    continue
-                
-                # Convert images to numpy arrays
-                color_image = np.asanyarray(color_frame.get_data())
+
+                if not contact:
+                    color_frame = frames.get_color_frame()
+                    if not color_frame:
+                        continue
+                    # Convert images to numpy arrays
+                    color_image = np.asanyarray(color_frame.get_data())
+                if contact:
+                    # If we are also finding contact points, we need the depth frame
+                    # Align the depth frame to color frame
+                    aligned_frames = self.align.process(frames)
+
+                    # Get aligned frames
+                    aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+                    color_frame = aligned_frames.get_color_frame()
+                    depth_image = np.asanyarray(aligned_depth_frame.get_data())
+
+                    if not aligned_depth_frame or not color_frame:
+                        # Check that both the depth and color frames are valid
+                        continue
+                    
+                    # Convert images to numpy arrays
+                    color_image = np.asanyarray(color_frame.get_data())
+
+                    # Get pointcloud from depth image
+                    points = self.pc.calculate(aligned_depth_frame)
+
+                    # Get individual points from pointcloud
+                    self.vtx = np.asanyarray(points.get_vertices()).reshape(480, 640)
+
+                                   
+
                 
                 if save:
                     if (time() - prev_save_time) > save_delay:
@@ -177,6 +251,15 @@ class Aruco_Track:
                         self.live_thread(color_image)  # Start aruco analysis in another thread
                         prev_save_live_time = time()
                         #break
+                
+                """
+                #Uncomment this to see live feed
+                cv2.imshow("image", color_image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                     break
+                """
+        except Exception as e:
+            print(e)
             
         finally:
 
@@ -185,8 +268,8 @@ class Aruco_Track:
             self.pipe.stop()
             print("RealSense pipeline stopped")
 
-    def start_save_frames_thread(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1):
-        save_frame = threading.Thread(target=self.save_frames, args=(save, save_delay, live, live_delay, drive, folder, hand, direction, trial,), daemon=True)
+    def start_save_frames_thread(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1, contact = False):
+        save_frame = threading.Thread(target=self.save_frames, args=(save, save_delay, live, live_delay, drive, folder, hand, direction, trial, contact,), daemon=True)
         save_frame.start()
 
 
@@ -217,6 +300,8 @@ class Aruco_Track:
         (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
             parameters=self.ARUCO_PARAMS["aruco_params"])
 
+        # TODO; calc center/rotation w/
+
         rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.ARUCO_PARAMS["marker_side_dims"], self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
 
         if self.first_trial:
@@ -232,8 +317,28 @@ class Aruco_Track:
         else:
             # Save the relative position position
             self.current_pos = self.calc_poses(corners, rvec, tvec)
+            #print(self.current_pos)
             #y = threading.Thread(target=self.fun_things, args=(), daemon=True)
             #y.start()
+            # Now we calculate the contours
+            f_1, f_2 = self.contour.find_countours(color_image)
+            if f_1 is not None:
+                    
+                self.finger_1 = [[self.vtx[f_1[0][0]][f_1[0][1]][0], self.vtx[f_1[0][0]][f_1[0][1]][1]], [self.vtx[f_1[1][0]][f_1[1][1]][0], self.vtx[f_1[1][0]][f_1[1][1]][1]]]
+                self.finger_2 = [[self.vtx[f_2[0][0]][f_2[0][1]][0], self.vtx[f_2[0][0]][f_2[0][1]][1]], [self.vtx[f_2[1][0]][f_2[1][1]][0], self.vtx[f_2[1][0]][f_2[1][1]][1]]]
+                #print("f_1")
+                #print(self.vtx[f_1[0][0]])
+                #print("f_2")
+                #print(self.finger_2)
+                #print("ho")
+                self.updated = True
+
+                #if not self.fing_1_contact == None:
+                #    image = cv2.circle(image, f_1, radius, color, thickness)
+                 #   cv2.imshow("current", color_image)
+
+
+
         
 
         
@@ -245,23 +350,36 @@ class Aruco_Track:
 
     def live_plotting(self):
         fig, ax = plt.subplots(figsize=(15, 12))
-        # set the axes limits
+        # set the axes limitscurrent_pos
         ax.axis([-.2,.2,-.2,.2])
         ax.set_title("Relative Position in mm")
         # set equal aspect such that the circle is not shown as ellipse
         ax.set_aspect("equal")
         # create a point in the axes
         point, = ax.plot(0,0, marker=(4, 0, 0), markersize=20)
+        cont_l, = ax.plot(.1,.1, marker=(2, 0, 0), markersize=20)
+        cont_r, = ax.plot(-.1,-.1, marker=(2, 0, 0), markersize=20)
 
         # Updating function, to be repeatedly called by the animation
-        def update(phi):
+        def update(blank):
             # obtain point coordinates 
             # set point's coordinates
-            print(self.current_pos)
+            if self.event.is_set():
+                ani.event_source.stop()
+                ex("Break due to main thread")
+            #print(self.current_pos)
+            if not self.fing_1_contact[0] == None:
+                cont_l.set_data([self.fing_1_contact[0]],[self.fing_1_contact[1]])
+                cont_l.set_markersize(40)
+                cont_l.set_marker((4, 0, 0))
+
+                cont_r.set_data([self.fing_2_contact[0]],[self.fing_2_contact[1]])
+                cont_r.set_markersize(40)
+                cont_r.set_marker((4, 0, 0))
             point.set_data([self.current_pos[0]],[self.current_pos[1]])
             point.set_marker((4, 0, math.degrees(self.current_pos[2])+45.0))
             point.set_markersize(50)
-            return point,
+            return point, cont_l, cont_r, 
 
         
         ani = animation.FuncAnimation(fig, update, interval=10)
@@ -272,6 +390,7 @@ class Aruco_Track:
         self.event.set()
     
     def live_plotting_thread(self):
+        print("here")
         z = threading.Thread(target=self.live_plotting, args=(), daemon=True)
         z.start()
 
@@ -300,7 +419,8 @@ class Aruco_Track:
                 raise Exception("Row of nans, skipping calculation")
 
             rel_angle = self._angle_between(init_corners[0][0][0] - init_corners[0][0][2], corners[0][0][0] - corners[0][0][2])
-            rel_rvec, rel_tvec = self._relative_position(init_rvec, init_tvec, next_rvec, next_tvec)
+            #TODO: Changed frame
+            rel_rvec, rel_tvec = next_rvec, next_tvec# self._relative_position(init_rvec, init_tvec, next_rvec, next_tvec)
 
             # found the stack overflow for it?
             # https://stackoverflow.com/questions/51270649/aruco-marker-world-coordinates
@@ -313,6 +433,7 @@ class Aruco_Track:
                 row_data = [np.nan, np.nan, np.nan]
 
         pose_data = row_data
+        print(pose_data)
 
         return np.around(pose_data, decimals=4)
 
@@ -375,8 +496,7 @@ class Aruco_Track:
         """ Returns the unit vector of the vector.  """
         return vector / np.linalg.norm(vector)
 
-    def save_one_image(self, file_name = "test.jpg"):
-        self.start_realsense()
+    def get_image(self):
         while True:
             # Wait for a coherent pair of frames: depth and color
             frames = self.pipe.wait_for_frames()
@@ -386,10 +506,8 @@ class Aruco_Track:
                 
             # Convert images to numpy arrays
             color_image = np.asanyarray(color_frame.get_data())
-            cv2.imwrite(file_name, color_image)
-            break
-
-        self.pipe.stop()
+            return color_image
+     
 
 
 
@@ -403,6 +521,6 @@ if __name__ == "__main__":
     at = Aruco_Track(ARUCO_PARAMS)
     try:
         at.start_realsense()
-        at.save_frames(save=False, save_delay=0.0, live = True, live_delay=1.5) # was 0
+        at.save_frames(save=False, save_delay=0.0, live = True, live_delay=1.5, contact = True) # was 0
     finally: 
         at.event.set()

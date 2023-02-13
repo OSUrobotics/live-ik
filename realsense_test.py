@@ -141,7 +141,7 @@ try:
                 #([60, 60, 15], [140, 140, 70]) # green
                 #([130, 85, 10], [160, 105, 70]) # blue
                 #([70, 35, 120], [130, 80, 200])
-                ([25, 15, 60], [120, 70, 160])
+                ([20, 5, 50], [60, 47, 160])
             ]
 
         for (lower, upper) in boundaries:
@@ -174,8 +174,8 @@ try:
             #contours.pop(ahh)
             #cv2.imshow("Gray", ahh)
             #cv2.waitKey()
-
-            approx = cv2.approxPolyDP(c, 6, True)
+            # Was 6
+            approx = cv2.approxPolyDP(c, 3, True)
             # draw the approximated contour on the image
             
             output3 = output.copy()
@@ -183,7 +183,7 @@ try:
 
             # Print the location of the approximated contour
 
-            print(vtx[approx[0][0][1]][approx[0][0][0]], vtx[approx[1][0][1]][approx[1][0][0]])
+            #print(vtx[approx[0][0][1]][approx[0][0][0]], vtx[approx[1][0][1]][approx[1][0][0]])
             
             
             cv2.namedWindow("Original v Approximated Contour")
@@ -191,7 +191,7 @@ try:
             # show the approximated contour image
             #print()
             cv2.imshow("Original v Approximated Contour", np.hstack([image,output,output3]))
-            cv2.waitKey(0)
+            cv2.waitKey(1)
         
         
         

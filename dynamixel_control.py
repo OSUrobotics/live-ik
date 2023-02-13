@@ -12,11 +12,14 @@ from pathlib import Path
 class Dynamixel:
 
     def __init__(self): 
-        self.DEVICENAME = '/dev/ttyUSB0'
+        self.DEVICENAME = '/dev/ttyUSB3'
         self.PROTOCOL_VERSION = 2.0
         self.BAUDRATE = 57600
 
         self.portHandler = PortHandler(self.DEVICENAME)
+
+        # Create flag for first bulk read
+        self.first_bulk_read = True
         
 
         # Initialize PacketHandler instance
@@ -48,7 +51,7 @@ class Dynamixel:
         # key: id_number; value: Dxl object
         self.dxls = {}
             
-    def create_dynamixel_dict(self, type = "XL-320", ID_number = 0, calibration = [0, 511, 1023]) -> dict:
+    def create_dynamixel_dict(self, type = "XL-320", ID_number = 0, calibration = [0, 511, 1023], shift = 0) -> dict:
         """ Takes in parameters and creates a dictionary for the dynamixel.
 
         Args:
@@ -63,7 +66,8 @@ class Dynamixel:
         """
         dynamixel_dict = {"type": type,
                           "ID_number": ID_number,
-                          "calibration": calibration}
+                          "calibration": calibration,
+                          "shift": shift}
         return dynamixel_dict
 
     def add_dynamixel(self, dyn_dict):
@@ -161,18 +165,21 @@ class Dynamixel:
         # TODO: see if we need checks for each motor here??
 
         # Must set to 2 bytes otherwise errors!!
-        for id in self.dxls.keys():
-            # Add parameter storage for Dynamixel present position
-            dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
-            if dxl_addparam_result != True:
-                print("[ID:%03d] groupBulkRead addparam failed" % id)
-                quit()
+        if self.first_bulk_read: # TODO: THIS IS VERY SLOW TO ADD PARAMS, make sure it doesn't happen live
+            for id in self.dxls.keys():
+                # Add parameter storage for Dynamixel present position
+                dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+                if dxl_addparam_result != True:
+                    print("[ID:%03d] groupBulkRead addparam failed" % id)
+                    quit()
+            self.first_bulk_read = False
+
         self.groupBulkRead.txRxPacket()
 
         for id in self.dxls.keys():
 
             # Saves position read in each Dxl object
-            self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].shift
             #print(f"Current pos: {self.dxls[id].read_position}")
 
         self.groupBulkRead.clearParam()
@@ -225,7 +232,11 @@ class Dynamixel:
         # Loop through all Dxls
         for id in self.dxls.keys():
             dxl = self.dxls[id]
-            param_goal_position = [DXL_LOBYTE(DXL_LOWORD(dxl.goal_position)), DXL_HIBYTE(DXL_LOWORD(dxl.goal_position)), DXL_LOBYTE(DXL_HIWORD(dxl.goal_position)), DXL_HIBYTE(DXL_HIWORD(dxl.goal_position))]
+
+            # Adjust goal by shift 
+            goal = dxl.goal_position + dxl.shift
+
+            param_goal_position = [DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)), DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal))]
             # Add Dynamixel goal position value to the Bulkwrite parameter storage
             dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_GOAL_POSITION, dxl.LEN_GOAL_POSITION, param_goal_position)
             if dxl_addparam_result != True:
@@ -338,7 +349,7 @@ class Dynamixel:
     def replay_pickle_data(self, file_location="Open_Loop_Data", file_name="angles_N.pkl", delay_between_steps: float = .01):
         
         try:    
-            pickle_length = self.load_pickle("Open_Loop_Data", "angles_N.pkl")
+            pickle_length = self.load_pickle(file_location, file_name)
             #self.map_pickle(0)
             #self.send_goal()
             #input("Press Enter to continue to next step.")
@@ -353,7 +364,7 @@ class Dynamixel:
 
     def go_to_initial_position(self, file_location="Open_Loop_Data", file_name="angles_N.pkl"):
         try: 
-            pickle_length = self.load_pickle("Open_Loop_Data", "angles_N.pkl")
+            pickle_length = self.load_pickle(file_location, file_name)
             self.map_pickle(0)
             self.send_goal()
         except:
@@ -361,18 +372,16 @@ class Dynamixel:
 
 
 
-
-
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 460, 1023]))
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 450, 1023]))
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 490, 1023]))
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 515, 1023]))
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 450, 1023], shift = -25)) # Negative on left side
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 553, 1023], shift = 0))
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 465, 1023], shift = 25)) # Positive on right side
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 545, 1023], shift = 0))
 
 
 
     Dynamixel_control.setup_all()
-    Dynamixel_control.replay_pickle_data(file_name="angles_N.pkl", delay_between_steps = .01)
+    Dynamixel_control.replay_pickle_data(file_name="angles_E.pkl", delay_between_steps = .005)
 
     
