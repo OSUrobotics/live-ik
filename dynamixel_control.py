@@ -12,7 +12,7 @@ from pathlib import Path
 class Dynamixel:
 
     def __init__(self): 
-        self.DEVICENAME = '/dev/ttyUSB0'
+        self.DEVICENAME = '/dev/ttyUSB2'
         self.PROTOCOL_VERSION = 2.0
         self.BAUDRATE = 57600
 
@@ -160,7 +160,7 @@ class Dynamixel:
         
         """
 
-        self.groupBulkRead.txRxPacket()
+        #self.groupBulkRead.txRxPacket()
 
         # TODO: see if we need checks for each motor here??
 
@@ -179,10 +179,13 @@ class Dynamixel:
         for id in self.dxls.keys():
 
             # Saves position read in each Dxl object
-            self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].shift
+            #test = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            self.dxls[id].read_position = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos - self.dxls[id].shift)
+            #if id ==3:
+
+            #    print(f"Val: {test}, Rad: {self.dxls[id].read_position}")
             #print(f"Current pos: {self.dxls[id].read_position}")
 
-        self.groupBulkRead.clearParam()
     
     def get_position(self, id: int):
         return self.dxls[id].read_position
@@ -266,7 +269,7 @@ class Dynamixel:
 
         
     def end_program(self):
-        """ Turns off Dynamixel torque and closes the port. Run this upone exit/program end.
+        """ Turns off Dynamixel torque and closes the port. Run this upon exit/program end.
 
         Args:
             none
@@ -331,6 +334,14 @@ class Dynamixel:
 
         return pos
 
+    def convert_pos_to_rad(self, pos: int) -> float:
+        pos = float(pos)
+        deg = np.multiply(pos, (300.0/1023.0))
+
+        rad = np.multiply(deg, (pi/180.0))
+
+        return rad
+
 
     def map_pickle(self, i: int):
         """ Convert from relative to absolute positions based on the calibration. Updates global goal position variable.
@@ -374,14 +385,14 @@ class Dynamixel:
 
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 450, 1023], shift = -25)) # Negative on left side
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 450, 1023], shift = -30)) # Negative on left side
     Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 553, 1023], shift = 0))
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 465, 1023], shift = 25)) # Positive on right side
+    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 465, 1023], shift = 30)) # Positive on right side
     Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 545, 1023], shift = 0))
 
 
 
     Dynamixel_control.setup_all()
-    Dynamixel_control.replay_pickle_data(file_name="angles_E.pkl", delay_between_steps = .005)
+    Dynamixel_control.replay_pickle_data(file_name="angles_N.pkl", delay_between_steps = .005)
 
     

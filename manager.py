@@ -9,6 +9,9 @@ import dynamixel_control
 from time import time, sleep
 import sys
 from contact_calculation import ContactPoint
+import os
+from handGenIK import liveik as IK
+
 class ik_manager:
 
     def __init__(self):
@@ -19,19 +22,41 @@ class ik_manager:
         #old self.camera_calibration = np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000)))
         #old self.r_t_dists = np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
 
+        self.initial_pose = [0.0, 0.0, 0.0]
 
-        pass
+        self.f1_direction_dict = {
+            "N": np.array([0.01, .15]),
+            "NE": np.array([0.2, .2]),
+            "E": np.array([0.2, .1067]),
+            "SE": np.array([.2, 0]),
+            "S": np.array([0.01, .05]),
+            "SW": np.array([-0.18, 0]),
+            "W": np.array([-0.18, .1067]),
+            "NW": np.array([-0.18, .2])}
+        self.f2_direction_dict = {
+            "N": np.array([-0.01, .15]),
+            "NE": np.array([0.18, .2]),
+            "E": np.array([0.18, .1067]),
+            "SE": np.array([0.18, 0]),
+            "S": np.array([-0.01, .05]),
+            "SW": np.array([-0.2, 0]),
+            "W": np.array([-0.2, .1067]),
+            "NW": np.array([-0.2, .2])}
 
-    def get_user_params(self):
-        user_in = input("Enter 'o' for Open Loop, 'c' for closed loop")
-        if user_in == 'o':
-            pass
-        elif user_in == 'c':
-            pass
-        else:
-            print('Invalid input, please try again!')
+        self.palm_shift = .1 # .1 m from object to palm
+    
+    def live_run(self):
+        # Set up the IK
+        testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [.03, 0, 0]},
+            "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [-.03, 0, 0]}}
+        ik_left = IK.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
+        ik_right = IK.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
 
-    def open_loop(self, dyn_file_location="Open_Loop_Data", dyn_file_name="angles_E.pkl"):
+        # Now 
+
+
+        # Ok, so we start by setting up the classes
+        ## ARUCO
         ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
                         "aruco_params": cv2.aruco.DetectorParameters_create(),
                         "marker_side_dims": 0.03,
@@ -39,56 +64,175 @@ class ik_manager:
                         "opencv_radial_and_tangential_dists": self.r_t_dists
                         }
         at = aruco.Aruco_Track(ARUCO_PARAMS)
-
-        # Set up Dynamixels
+        ## CONTOUR
+        contour = ContourFind()
+        ## CONTACT
+        contact = ContactPoint()
+        ## DYNAMIXEL
         self.dyn_replay_setup()
-        self.dynamixel_control.go_to_initial_position(dyn_file_location, dyn_file_name)
 
+        # Move Dynamixels to starting position
+        self.dynamixel_control.go_to_initial_position()
+
+        #input("Press enter to coninue.")
+        #print("You have 3 seconds to reset")
+        input("enter to continue")
+        # Start RealSense
         at.start_realsense()
-        #at.save_frames()
-        try:
-            print("ho")
-            at.start_save_frames_thread(save=False, save_delay=0.0, live = True, live_delay=0.0)
+        #sleep(1)
+        first_time = True
+        first_counter = 0 
+        while True:
+            # Get the color image and point data
+            color_image, vtx = at.get_frame()
 
-            counter = 0
-            start_time = time()
-            while at.first_trial == True:
-                # Wait until we get a good reading of the aruco marker
-                if time() - start_time > 5.0:
-                    sys.exit("Cannot find aruco marker")
-                pass
+            if first_counter < 20:
+                first_counter+=1
+                continue
 
-
-            print("Saved first aruco marker loc, can continue")
-            at.live_plotting_thread()
+            # Get our current object pose in pixel coordinates
+            current_pose, corners, ids = at.object_pose(color_image, vtx, True)
+            if not current_pose.any():
+                continue
             
-            self.dyn_replay(dyn_file_location, dyn_file_name)
-        finally:
-            # Ending all threads
-            print("Stopping all threads")
-            at.event.set()
-            main_thread = threading.current_thread()
-            for t in threading.enumerate():
-                if t is main_thread:
-                    continue
-                logging.debug('joining %s', t.getName())
-                t.join()
-            print("All threads joined")
+        
+            # Get the contours back in pixel coordinates
+            f1_contour, f2_contour, orig_c1, orig_c2 = contour.find_countours(color_image)
+            if f1_contour is not None:
+                contour_image = cv2.drawContours(color_image, [orig_c1, orig_c2], -1, (0, 255, 0), 3)
+                
 
-    def contat_test(self):
-        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": self.camera_calibration,
-                        "opencv_radial_and_tangential_dists": self.r_t_dists
-                        }
-        at = aruco.Aruco_Track(ARUCO_PARAMS)
+            # Convert from from pixel coordinates to m w/ depth data
+            object_pose = self._pix_to_m(current_pose[0:2], vtx)
+            if first_time:
+                first_time = False
+                self.initial_pose = object_pose
+                continue
 
-        # Set up Dynamixels
-        self.dyn_replay_setup()
-        #self.dynamixel_control.go_to_initial_position(dyn_file_location, dyn_file_name)
+            finger_1_contour_m = self._pix_to_m(f1_contour, vtx)
+            finger_2_contour_m = self._pix_to_m(f2_contour, vtx)
 
-        at.start_realsense()
+            # Take the contours and object pose and calculate contact points
+            contact_point_l, contact_delta_l = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_1_contour_m)
+            contact_point_r, contact_delta_r = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_2_contour_m)
+
+            # For plotting, calculate the pixels per mm
+            test_obj = np.array([current_pose[0]+10, current_pose[1]])
+            test_obj_mm = self._pix_to_m(test_obj, vtx)
+            diff_x = test_obj_mm[0] - object_pose[0] # Distance per 10 pixels in x
+
+            test_obj = np.array([current_pose[0], current_pose[1]-10])
+            test_obj_mm = self._pix_to_m(test_obj, vtx)
+            diff_y = test_obj_mm[1] - object_pose[1] # Distance per 10 pixels in y
+
+            # Now take a find the contact point's number of pixels 
+            if np.isclose(diff_x, 0.0) or np.isclose(diff_y, 0.0):
+                continue
+            x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
+            y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
+            #print(f"X_l: {x_l}, object: {current_pose[0]}, combined: {x_l +current_pose[0]}")
+            #print(f"Y: {y_l}, object: {current_pose[1]}, combined: {y_l +current_pose[1]}")
+            # Now take a find the contact point's number of pixels 
+            x_r = int(10*(object_pose[0]-contact_point_r[0])/diff_x) 
+            y_r = int(10*(object_pose[1]-contact_point_r[1])/diff_y)
+            #print(f"X_l: {x_r}, object: {current_pose[0]}, combined: {x_r +current_pose[0]}")
+            #print(f"Y: {y_r}, object: {current_pose[1]}, combined: {y_r +current_pose[1]}")
+
+            #Draw a red circle with zero radius and -1 for filled circle
+            image2 = cv2.circle(color_image, (int(current_pose[0]-x_l),int(current_pose[1]+y_l)), radius=3, color=(0, 0, 255), thickness=-1)
+            image3 = cv2.circle(color_image, (int(current_pose[0]-x_r),int(current_pose[1]+y_r)), radius=3, color=(255, 0, 0), thickness=-1)
+
+            cv2.imshow("hi", image3)
+            cv2.waitKey(500)
+            # Calculate the relative pose for the IK solver
+            # Object starts 10cm from the joints
+
+            # We just need to pass in the joint angles and the contact point deltas
+
+            # Left finger has joints 0 and 1
+
+            
+            self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
+            m0 = self.dynamixel_control.dxls[0].read_position # Get the position of motor 0
+            m1 = self.dynamixel_control.dxls[1].read_position # Get the position of motor 1
+            m2 = self.dynamixel_control.dxls[2].read_position # Get the position of motor 2
+            m3 = self.dynamixel_control.dxls[3].read_position # Get the position of motor 3
+
+            joint_a = [m2, m3, m0, m1]
+            # Update our angles in the FK 
+            ik_left.update_angles = joint_a
+            ik_right.update_angles = joint_a
+
+
+            # We need to get the target
+            """
+            Target is a point on the line from contact point to goal
+            Where 0,0 is palm center
+
+            So we need to:
+            1) Get point along line from contact to goal
+            2) Take that point and translate it the amount of the starting position of the object (to get it relative to 0,0 of starting object)
+            3) Translate the point 10 cm in y (get relative to palm base, not initial object position)
+            """
+            l_point = self.step_towards_goal(contact_point_l, self.f1_direction_dict["E"], .025)
+            shifted_by_start_l = [l_point[0]-self.initial_pose[0], l_point[1]-self.initial_pose[1]]
+            shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
+
+            r_point = self.step_towards_goal(contact_point_r, self.f2_direction_dict["E"], .025)
+            shifted_by_start_r = [r_point[0]-self.initial_pose[0], r_point[1]-self.initial_pose[1]]
+            shifted_by_palm_r = [shifted_by_start_r[0], shifted_by_start_r[1]+self.palm_shift]
+            #p#rint(f"Contact: {contact_point_l}, Shifted {shifted_by_palm_l}")
+            #p#rint(f"Contact in frame: {contact_delta_l}")
+
+            
+            #sleep(5)
+            # Now we calculate the ik
+            
+            _, new_angles_l, _ = ik_left.calculate_ik(target = shifted_by_palm_l, ee_location=[contact_delta_l[0], contact_delta_l[1], 1])
+            _, new_angles_r, _ = ik_right.calculate_ik(target = shifted_by_palm_r, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
+            #print(new_angles_l)
+            print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
+            #print(f"m2: {m2}, m3: {m3}, new_m2: {new_angles_r[0]}, new_m3: {new_angles_r[1]}")
+            
+            #ik_right.calculate_ik(target = 0, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
+            #print(f"M0: {m0}, M1: {m1}")
+
+            #print(f"Contact l: {contact_delta_l}, Contact r: {contact_delta_r}")
+
+            tes = self.dynamixel_control.dxls[0].goal_position
+            
+            
+            self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_l[0]))
+            self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_l[1]))
+            self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_r[0]))
+            self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_r[1]))
+            print(f"Old goal: {tes}, New goal: {self.dynamixel_control.dxls[0].goal_position}, Current pos: {m0}")
+            self.dynamixel_control.send_goal()
+            
+
+
+            
+            
+            #print(finger_1_contour_m)
+            
+                # Save our intiial pose of the object
+                
+            #if not dy.is_alive():
+            #    print("Finished moving")
+            #    break
+
+    def step_towards_goal(self, start_vec, end_vec, distance):
+        temp_x = end_vec[0] - start_vec[0]
+        temp_y = end_vec[1] - start_vec[1]
+        magnitude = np.sqrt((temp_x**2 + temp_y**2))
+        if magnitude <= distance:
+            return [end_vec[0], end_vec[1]]
+        temp_x /= magnitude
+        temp_y /= magnitude
+        temp_x = start_vec[0] + distance*temp_x
+        temp_y = start_vec[1] + distance*temp_y
+        return [temp_x, temp_y]
+
 
 
     def dyn_replay_setup(self):
@@ -106,127 +250,6 @@ class ik_manager:
     def dyn_replay_thread(self, dyn_file_location="Open_Loop_Data", dyn_file_name="angles_E.pkl", delay = .005):
         dy = threading.Thread(target=self.dyn_replay, args=(dyn_file_location,dyn_file_name,delay,), daemon=True)
         dy.start()
-
-    def save_one_image(self, file = "test.jpg"):
-        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": self.camera_calibration,
-                        "opencv_radial_and_tangential_dists": self.r_t_dists
-                        }
-        at = aruco.Aruco_Track(ARUCO_PARAMS)
-        at.start_realsense()
-        at.save_one_image(file)
-
-    def save_image_series(self, file = "test", delay = 1):
-        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": self.camera_calibration,
-                        "opencv_radial_and_tangential_dists": self.r_t_dists
-                        }
-        at = aruco.Aruco_Track(ARUCO_PARAMS)
-        at.start_realsense()
-        sleep(4)
-        i = 0
-        time_prev = 0
-        try:
-            while True:
-                im = at.get_image()
-                if time() - time_prev > delay:
-                    name = file+str(i)+".jpg"
-                    cv2.imwrite(name, im)
-                    time_prev = time()
-                    i += 1
-                    print("Image saved")
-                cv2.imshow("window", im)
-                cv2.waitKey(1)
-        except KeyboardInterrupt:
-            at.pipe.stop()
-
-    def test_aruco(self):
-        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": self.camera_calibration,
-                        "opencv_radial_and_tangential_dists": self.r_t_dists
-                        }
-        at = aruco.Aruco_Track(ARUCO_PARAMS)
-
-        at.start_realsense()
-        at.save_frames()
-
-
-    def closed_loop(self, dyn_file_location="Open_Loop_Data", dyn_file_name="angles_E.pkl"):
-        ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": self.camera_calibration,
-                        "opencv_radial_and_tangential_dists": self.r_t_dists
-                        }
-        at = aruco.Aruco_Track(ARUCO_PARAMS)
-        contact = ContactPoint()
-
-        # Set up Dynamixels
-        self.dyn_replay_setup()
-        self.dynamixel_control.go_to_initial_position(dyn_file_location, dyn_file_name)
-        
-
-        at.start_realsense()
-        
-        sleep(5)
-        
-
-        try:
-            # Get frames and get position of 
-            at.start_save_frames_thread(save=False, save_delay=0.0, live = True, live_delay=0.08, contact = True)
-            print("Start frame recording")
-            # Calculate the object pos/loc
-            counter = 0
-            start_time = time()
-            while at.first_trial == True:
-                # Wait until we get a good reading of the aruco marker
-                if time() - start_time > 5.0:
-                    sys.exit("Cannot find aruco marker")
-                pass
-            
-
-
-            print("Saved first aruco marker loc, can continue")
-            at.live_plotting_thread()
-            sleep(2)
-            self.dyn_replay_thread(dyn_file_location, dyn_file_name, .01)
-            
-            while True:
-                if at.updated:
-                    at.updated = False
-                    at.fing_1_contact = contact.contact_point_calculation(at.current_pos, at.finger_1)
-                    at.fing_2_contact = contact.contact_point_calculation(at.current_pos, at.finger_2)
-                    
-                    
-                    #ahh = cv2.aruco.drawDetectedMarkers(at.colo, at.corners, at.ids)
-                    ahh = cv2.drawContours(at.colo, [at.c[0]], -1, (0, 255, 0), 3)
-                    ahh = cv2.drawContours(ahh, [at.c[1]], -1, (0, 255, 0), 3)
-                    cv2.imshow("hi",ahh)
-                    cv2.waitKey(1)
-            
-            
-            
-            #self.dyn_replay(dyn_file_location, dyn_file_name)
-        finally:
-            # Ending all threads
-            print("Stopping all threads")
-            at.event.set()
-            main_thread = threading.current_thread()
-            for t in threading.enumerate():
-                if t is main_thread:
-                    continue
-                logging.debug('joining %s', t.getName())
-                t.join()
-            print("All threads joined")
-
-    def contat_test(self):
-        pass
 
     def linear_run(self, pickle_file):
         # Ok, so we start by setting up the classes
@@ -392,39 +415,13 @@ class ik_manager:
 
 if __name__ == "__main__":
     manager = ik_manager()
+
+    """
     pickle_files = ["angles_N.pkl", "angles_NE.pkl", "angles_E.pkl", "angles_SE.pkl", "angles_S.pkl", "angles_SW.pkl", "angles_W.pkl", "angles_NW.pkl"]
     for pkl in pickle_files:
         manager.linear_run(pkl)
     #manager.contour_visualizer()
-    
     """
-    dyn_file_location="Open_Loop_Data"
-    dyn_file_name="angles_E.pkl"
-
     
-    #manager.test_aruco()
-    ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
-                        "aruco_params": cv2.aruco.DetectorParameters_create(),
-                        "marker_side_dims": 0.03,
-                        "opencv_camera_calibration": manager.camera_calibration,
-                        "opencv_radial_and_tangential_dists": manager.r_t_dists
-                        }
-    at = aruco.Aruco_Track(ARUCO_PARAMS)
-    contact = ContactPoint()
-    contour = ContourFind()
-
-    # Set up Dynamixels
-    manager.dyn_replay_setup()
-    manager.dynamixel_control.go_to_initial_position(dyn_file_location, dyn_file_name)
-    sleep(1)
-
-    at.start_realsense()
-    sleep(1)
-
     
-    manager.dyn_replay_thread(dyn_file_location, dyn_file_name, .01)
-    """
-
-
-
-    #manager.save_image_series()
+    manager.live_run()
