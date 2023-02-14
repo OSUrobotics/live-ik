@@ -46,22 +46,34 @@ class ContourFind:
                 pass
             else: 
                 # TODO: skip and continue instead of just breaking??
-                sys.exit("Invalid contour(s)")
+                return None, None, None, None
                 
             # Now order the contour points correcly
+            #print("Cont_1")
+            #print(cont_1.shape)
+            #print(cont_1)            
+            #print("Cont_2")
+            #print(cont_2.shape)
+            # print(cont_2[0][0])
             if cont_1[0][0] < cont_2 [0][0]:
+                #print("normal")
                 # Cont 1 is left finger
                 left_fing_line = cont_1
                 right_fing_line = cont_2
+                #approx_cont_1 = approx_cont_1
             else:
+                #print("switched")
                 # Cont 2 is the left finger
                 right_fing_line = cont_1
-                left_fing_line = cont_2    
-                
+                left_fing_line = cont_2   
+                test = approx_cont_1
+                approx_cont_1 = approx_cont_2
+                approx_cont_2 = test 
+            
             # Return the endpoints of each finger line    
-            return left_fing_line, right_fing_line 
+            return left_fing_line, right_fing_line, approx_cont_1, approx_cont_2
         except:
-            return None, None
+            return None, None, None, None
     
 
     def convert_pix_to_m(self, depth_image, left_finger, right_finger):
@@ -72,7 +84,7 @@ class ContourFind:
         """ Takes in a contour and checks that is a 2x2 array
         
         """
-        if cont.shape == (2,2):
+        if cont.shape[0] == 2 and cont.shape[1] == 2:
             return True
         else:
             return False
@@ -88,3 +100,7 @@ class ContourFind:
         # Get individual points from pointcloud
 
         vtx = np.asanyarray(points.get_vertices()).reshape(480, 640)
+
+if __name__ == "__main__":
+    contour = ContourFind()
+

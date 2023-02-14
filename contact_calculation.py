@@ -340,7 +340,7 @@ class ContactPoint:
         # Get contact point in distal frame
         contact_delta = self.calculate_contact_delta(finger_points, self.dist_joint_to_red, contact_point)
         self.first = False
-        return contact_delta
+        return contact_point, contact_delta
 
 
 

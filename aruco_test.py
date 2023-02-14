@@ -10,7 +10,7 @@ ARUCO_DICT = {
 
 # load the input image from disk and resize it
 print("[INFO] loading image...")
-image = cv2.imread("test.png")
+image = cv2.imread("Images/test_red_second.jpg")
 # verify that the supplied ArUCo tag exists and is supported by
 # OpenCV
 
@@ -21,3 +21,8 @@ arucoParams = cv2.aruco.DetectorParameters_create()
 (corners, ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dict, parameters=arucoParams)
 
 print(corners) 
+if not corners:
+	print("hiiii")
+frame_markers = cv2.aruco.drawDetectedMarkers(image.copy(), corners, ids)
+cv2.imshow("ho", frame_markers)
+cv2.waitKey(0)

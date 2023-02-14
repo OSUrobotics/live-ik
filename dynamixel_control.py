@@ -12,7 +12,7 @@ from pathlib import Path
 class Dynamixel:
 
     def __init__(self): 
-        self.DEVICENAME = '/dev/ttyUSB3'
+        self.DEVICENAME = '/dev/ttyUSB0'
         self.PROTOCOL_VERSION = 2.0
         self.BAUDRATE = 57600
 

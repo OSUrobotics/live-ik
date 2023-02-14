@@ -56,10 +56,15 @@ class Aruco_Track:
         self.fing_1_contact = [None, None]
         self.fing_2_contact = [None, None]
 
+        self.corners = []
+        self.ids = 0.0
+
     def start_realsense(self):
         """
         Starts RealSense pipeline
         """
+
+        print("Setting up RealSense")
         self.pipe = rs.pipeline()
         # Create a config and configure the pipeline to stream
         #  different resolutions of color and depth streams
@@ -113,7 +118,46 @@ class Aruco_Track:
             except:
                 ex("Check Realsense - unable to recieve frames")
 
+        print("RealSense success")
+
+    def get_frame(self):
+        try:
+            while True:
+                # Wait for a coherent pair of frames: depth and color
+                frames = self.pipe.wait_for_frames()
+
+                # Align the depth frame to color frame
+                aligned_frames = self.align.process(frames)
+
+                # Get aligned frames
+                aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+                color_frame = aligned_frames.get_color_frame()
+
+                if not aligned_depth_frame or not color_frame:
+                    # Check that both the depth and color frames are valid, otherwise continue
+                    continue
                 
+                # Convert color image to numpy arrays
+                color_image = np.asanyarray(color_frame.get_data())
+
+                # Get pointcloud from depth image
+                points = self.pc.calculate(aligned_depth_frame)
+
+                # Get individual points from pointcloud
+                vtx = np.asanyarray(points.get_vertices()).reshape(480, 640)
+
+                return color_image, vtx
+                
+        except Exception as e:
+            print(e)
+            
+        #finally:
+         #   # Stop streaming
+         #   print("Stopping RealSense pipeline")
+          #  self.pipe.stop()
+         #   print("RealSense pipeline stopped")
+
+
 
 
 
@@ -203,38 +247,28 @@ class Aruco_Track:
                 # Wait for a coherent pair of frames: depth and color
                 frames = self.pipe.wait_for_frames()
 
-                if not contact:
-                    color_frame = frames.get_color_frame()
-                    if not color_frame:
-                        continue
-                    # Convert images to numpy arrays
-                    color_image = np.asanyarray(color_frame.get_data())
-                if contact:
-                    # If we are also finding contact points, we need the depth frame
-                    # Align the depth frame to color frame
-                    aligned_frames = self.align.process(frames)
+                # If we are also finding contact points, we need the depth frame
+                # Align the depth frame to color frame
+                aligned_frames = self.align.process(frames)
 
-                    # Get aligned frames
-                    aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
-                    color_frame = aligned_frames.get_color_frame()
-                    depth_image = np.asanyarray(aligned_depth_frame.get_data())
+                # Get aligned frames
+                aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+                color_frame = aligned_frames.get_color_frame()
+                #depth_image = np.asanyarray(aligned_depth_frame.get_data()) # Not needed
 
-                    if not aligned_depth_frame or not color_frame:
-                        # Check that both the depth and color frames are valid
-                        continue
-                    
-                    # Convert images to numpy arrays
-                    color_image = np.asanyarray(color_frame.get_data())
-
-                    # Get pointcloud from depth image
-                    points = self.pc.calculate(aligned_depth_frame)
-
-                    # Get individual points from pointcloud
-                    self.vtx = np.asanyarray(points.get_vertices()).reshape(480, 640)
-
-                                   
-
+                if not aligned_depth_frame or not color_frame:
+                    # Check that both the depth and color frames are valid
+                    continue
                 
+                # Convert images to numpy arrays
+                color_image = np.asanyarray(color_frame.get_data())
+
+                # Get pointcloud from depth image
+                points = self.pc.calculate(aligned_depth_frame)
+
+                # Get individual points from pointcloud
+                self.vtx = np.asanyarray(points.get_vertices()).reshape(480, 640)
+
                 if save:
                     if (time() - prev_save_time) > save_delay:
                         # Save if enabled and enough time has elapsed
@@ -255,9 +289,10 @@ class Aruco_Track:
                 """
                 #Uncomment this to see live feed
                 cv2.imshow("image", color_image)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                if cv2.waitKey(0) & 0xFF == ord('q'):
                      break
                 """
+                
         except Exception as e:
             print(e)
             
@@ -267,6 +302,52 @@ class Aruco_Track:
             print("Stopping RealSense pipeline")
             self.pipe.stop()
             print("RealSense pipeline stopped")
+
+    def get_square_pose(self, corners):
+        # Find the midpoint between the first and third corner
+        first_corn = corners[0]
+        third_corn = corners[2]
+
+        delta_x = third_corn[0] - first_corn[0]
+        delta_y = third_corn[1] - first_corn[1]
+
+        # This is the midpoint of the line, which is the center of the object
+        midpoint = [first_corn[0]+delta_x/2.0, first_corn[1]+delta_y/2.0]
+
+        # Now we find the rotation, define CCW as + (with the unit circle)
+        angle = self.rotate_pose(first_corn, midpoint)
+
+        return [int(midpoint[0]), int(midpoint[1]), angle]
+
+    def rotate_pose(self, first_corner, center):
+        # Define unit vector we care about (we can use this reference to calculate contact deltas in the correct frame)
+        def_vec = [0, 1] # Vertical along y-axis
+
+        # Get line deltas
+        d_x = first_corner[0]-center[0]
+        d_y = first_corner[1]-center[1]
+
+        # Get vector
+        in_vector = [d_x, d_y]
+
+        # Normalize vector
+        unit_vec = in_vector / np.linalg.norm(in_vector)
+
+        # Find the angle between vectors
+        dot_product = np.dot(def_vec, unit_vec)
+        angle = np.arccos(dot_product)
+
+        if first_corner[0] < center[0]:
+            # if in left quadrants, positive rotation
+            angle = angle + np.pi/4
+        else:
+            # Negative angle 
+            angle = -angle - np.pi/4
+            
+        return -angle
+
+
+
 
     def start_save_frames_thread(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1, contact = False):
         save_frame = threading.Thread(target=self.save_frames, args=(save, save_delay, live, live_delay, drive, folder, hand, direction, trial, contact,), daemon=True)
@@ -285,6 +366,13 @@ class Aruco_Track:
         x = threading.Thread(target=self.live_tracking_analysis, args=(color_image,), daemon=True)
         x.start()
 
+    def pix_to_m(self, point = [0, 0]):
+        # Use the depth data from the Realsense to covert pixels to m
+
+        #returns x,y
+        return self.vtx[int(point[0])][int(point[1])][0], self.vtx[int(point[0])][int(point[1])][1]
+
+
 
     def live_tracking_analysis(self, color_image):
         """Runs Aruco marker detection on one image. Updates the global position variables.
@@ -295,49 +383,143 @@ class Aruco_Track:
         Returns:
             none
         """
+        self.colo = color_image.copy()
 
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
             parameters=self.ARUCO_PARAMS["aruco_params"])
+        self.corners = corners
+        self.ids = ids
 
-        # TODO; calc center/rotation w/
 
-        rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.ARUCO_PARAMS["marker_side_dims"], self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
+        if corners:
+            self.first_trial = False
+            
+            pose = self.get_square_pose(corners[0][0])
+            x, y = self.pix_to_m(pose)
 
-        if self.first_trial:
-            if rvec is None:
-                print("No Aruco marker in the first frame!!")
-            else:
-                # If the first run, save the starting position to use for relative calculations
-                self.first_trial = False
-
-                self.first_corner = corners
-                self.first_rvec = rvec
-                self.first_tvec = tvec
+            # Update our pose
+            self.current_pos = [x, y, pose[2]]
+        elif self.first_trial:
+            print("No Aruco marker in the first frame!!")
         else:
+            print("No marker detected!!")
+        
+        # Find contours
+        f_1, f_2, c1, c2 = self.contour.find_countours(color_image)
+        if f_1 is not None:   
+            self.finger_1 = [[-self.vtx[f_1[0][1]][f_1[0][0]][0], self.vtx[f_1[0][1]][f_1[0][0]][1]], [-self.vtx[f_1[1][1]][f_1[1][0]][0], self.vtx[f_1[1][1]][f_1[1][0]][1]]]
+            self.finger_2 = [[-self.vtx[f_2[0][1]][f_2[0][0]][0], self.vtx[f_2[0][1]][f_2[0][0]][1]], [-self.vtx[f_2[1][1]][f_2[1][0]][0], self.vtx[f_2[1][1]][f_2[1][0]][1]]]
+
+            self.updated = True
+            self.c = [c1, c2]
+
+
+
+
+        #rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.ARUCO_PARAMS["marker_side_dims"], self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
+
+        #if self.first_trial:
+        #    if rvec is None:
+        #        print("No Aruco marker in the first frame!!")
+        #    else:
+        #        # If the first run, save the starting position to use for relative calculations
+        #        self.first_trial = False#
+        #
+        #        self.first_corner = corn    ers
+        #        self.first_rvec = rvec
+        #        self.first_tvec = tvec
+        #else:
             # Save the relative position position
-            self.current_pos = self.calc_poses(corners, rvec, tvec)
+         #   self.current_pos = self.calc_poses(corners, rvec, tvec)
             #print(self.current_pos)
             #y = threading.Thread(target=self.fun_things, args=(), daemon=True)
             #y.start()
             # Now we calculate the contours
-            f_1, f_2 = self.contour.find_countours(color_image)
-            if f_1 is not None:
+            #f_1, f_2 = self.contour.find_countours(color_image)
+            #if f_1 is not None:
                     
-                self.finger_1 = [[self.vtx[f_1[0][0]][f_1[0][1]][0], self.vtx[f_1[0][0]][f_1[0][1]][1]], [self.vtx[f_1[1][0]][f_1[1][1]][0], self.vtx[f_1[1][0]][f_1[1][1]][1]]]
-                self.finger_2 = [[self.vtx[f_2[0][0]][f_2[0][1]][0], self.vtx[f_2[0][0]][f_2[0][1]][1]], [self.vtx[f_2[1][0]][f_2[1][1]][0], self.vtx[f_2[1][0]][f_2[1][1]][1]]]
+            #    self.finger_1 = [[self.vtx[f_1[0][0]][f_1[0][1]][0], self.vtx[f_1[0][0]][f_1[0][1]][1]], [self.vtx[f_1[1][0]][f_1[1][1]][0], self.vtx[f_1[1][0]][f_1[1][1]][1]]]
+            #    self.finger_2 = [[self.vtx[f_2[0][0]][f_2[0][1]][0], self.vtx[f_2[0][0]][f_2[0][1]][1]], [self.vtx[f_2[1][0]][f_2[1][1]][0], self.vtx[f_2[1][0]][f_2[1][1]][1]]]
                 #print("f_1")
                 #print(self.vtx[f_1[0][0]])
                 #print("f_2")
                 #print(self.finger_2)
                 #print("ho")
-                self.updated = True
+            #    self.updated = True
 
                 #if not self.fing_1_contact == None:
                 #    image = cv2.circle(image, f_1, radius, color, thickness)
                  #   cv2.imshow("current", color_image)
 
+   
+   
+    def object_pose(self, color_image, vtx, first_trial = False):
+        self.colo = color_image.copy()
 
+        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
+            parameters=self.ARUCO_PARAMS["aruco_params"])
+
+        if corners:
+            self.first_trial = False
+            
+            pose = self.get_square_pose(corners[0][0])
+            #x, y = self.pix_to_m(pose)
+
+            # Update our pose
+            #current_pose = [x, y, pose[2]]
+        elif first_trial:
+            pose = None
+            print("No Aruco marker in the first frame!!")
+        else:
+            pose = None
+            print("No marker detected!!")
+        
+        return np.array(pose), corners, ids
+   
+   
+    def live_tracking_analysis_updated(self, color_image, vtx):
+        """Runs Aruco marker detection on one image. Updates the global position variables.
+
+        Args:
+            color_image (??): Color image from the Intel Realsense
+            
+        Returns:
+            none
+        """
+        self.colo = color_image.copy()
+
+        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
+            parameters=self.ARUCO_PARAMS["aruco_params"])
+        self.corners = corners
+        self.ids = ids
+
+
+        if corners:
+            self.first_trial = False
+            
+            pose = self.get_square_pose(corners[0][0])
+            x, y = self.pix_to_m(pose)
+
+            # Update our pose
+            self.current_pos = [x, y, pose[2]]
+        elif self.first_trial:
+            print("No Aruco marker in the first frame!!")
+        else:
+            print("No marker detected!!")
+        
+        # Find contours
+        f_1, f_2, c1, c2 = self.contour.find_countours(color_image)
+        if f_1 is not None:   
+            #self.finger_1 = [[-self.vtx[f_1[0][1]][f_1[0][0]][0], self.vtx[f_1[0][1]][f_1[0][0]][1]], [-self.vtx[f_1[1][1]][f_1[1][0]][0], self.vtx[f_1[1][1]][f_1[1][0]][1]]]
+            #self.finger_2 = [[-self.vtx[f_2[0][1]][f_2[0][0]][0], self.vtx[f_2[0][1]][f_2[0][0]][1]], [-self.vtx[f_2[1][1]][f_2[1][0]][0], self.vtx[f_2[1][1]][f_2[1][0]][1]]]
+
+            #self.updated = True
+            #self.c = [c1, c2]
+            return f_1, f_2, c1, c2
+        return None, None, None, None
 
         
 
@@ -370,19 +552,20 @@ class Aruco_Track:
             #print(self.current_pos)
             if not self.fing_1_contact[0] == None:
                 cont_l.set_data([self.fing_1_contact[0]],[self.fing_1_contact[1]])
-                cont_l.set_markersize(40)
-                cont_l.set_marker((4, 0, 0))
+                #cont_l.set_data([self.fing_1_contact[0]],[self.fing_1_contact[1]])
+                #cont_l.set_markersize(40)
+                #cont_l.set_marker((4, 0, 0))
 
                 cont_r.set_data([self.fing_2_contact[0]],[self.fing_2_contact[1]])
-                cont_r.set_markersize(40)
-                cont_r.set_marker((4, 0, 0))
+                #cont_r.set_markersize(40)
+                #cont_r.set_marker((4, 0, 0))
             point.set_data([self.current_pos[0]],[self.current_pos[1]])
             point.set_marker((4, 0, math.degrees(self.current_pos[2])+45.0))
             point.set_markersize(50)
             return point, cont_l, cont_r, 
 
         
-        ani = animation.FuncAnimation(fig, update, interval=10)
+        ani = animation.FuncAnimation(fig, update, interval=50)
  
         plt.show()
 
@@ -433,7 +616,8 @@ class Aruco_Track:
                 row_data = [np.nan, np.nan, np.nan]
 
         pose_data = row_data
-        print(pose_data)
+        #print(pose_data)
+        print("SHOULDNT SEE THISSSSSSSSSSSSSSSSSSSSSSSSSS")
 
         return np.around(pose_data, decimals=4)
 
