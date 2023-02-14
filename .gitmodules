@@ -1,3 +1,6 @@
 [submodule "aruco_tool"]
 	path = aruco_tool
 	url = https://github.com/NotCras/aruco_tool.git
+[submodule "hand-gen-IK"]
+	path = hand-gen-IK
+	url = https://github.com/Keeganfn/hand-gen-IK.git
