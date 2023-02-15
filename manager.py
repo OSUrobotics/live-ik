@@ -10,7 +10,9 @@ from time import time, sleep
 import sys
 from contact_calculation import ContactPoint
 import os
-from handGenIK import liveik as IK
+import importlib  
+hand = importlib.import_module("hand-gen-IK")
+
 
 class ik_manager:
 
@@ -49,8 +51,8 @@ class ik_manager:
         # Set up the IK
         testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [.03, 0, 0]},
             "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [-.03, 0, 0]}}
-        ik_left = IK.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
-        ik_right = IK.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
+        ik_left = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
+        ik_right = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
 
         # Now 
 
@@ -142,8 +144,9 @@ class ik_manager:
             image2 = cv2.circle(color_image, (int(current_pose[0]-x_l),int(current_pose[1]+y_l)), radius=3, color=(0, 0, 255), thickness=-1)
             image3 = cv2.circle(color_image, (int(current_pose[0]-x_r),int(current_pose[1]+y_r)), radius=3, color=(255, 0, 0), thickness=-1)
 
-            cv2.imshow("hi", image3)
-            cv2.waitKey(500)
+            #cv2.imshow("hi", image3)
+            #cv2.waitKey(500)
+            
             # Calculate the relative pose for the IK solver
             # Object starts 10cm from the joints
 
