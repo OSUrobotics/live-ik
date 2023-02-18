@@ -30,14 +30,14 @@ class ContourFind:
         c = sort_cont[0]
         epsilon = 0.1*cv2.arcLength(c,True)
         approx_cont_1 = cv2.approxPolyDP(c,epsilon,True)
-
-        # Grab the second largest contour and apprximate it to the two endpoints
-        c = sort_cont[1]
-        epsilon = 0.05*cv2.arcLength(c,True)
-        approx_cont_2 = cv2.approxPolyDP(c,epsilon,True)
-
-        # Get in the format we want
         try:
+            # Grab the second largest contour and apprximate it to the two endpoints
+            c = sort_cont[1]
+            epsilon = 0.05*cv2.arcLength(c,True)
+            approx_cont_2 = cv2.approxPolyDP(c,epsilon,True)
+
+            # Get in the format we want
+            
             cont_1 = np.array([approx_cont_1[0][0], approx_cont_1[1][0]])
             cont_2 = np.array([approx_cont_2[0][0], approx_cont_2[1][0]])
 

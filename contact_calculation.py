@@ -7,7 +7,7 @@ import sys
 
 # For our standard flat distal with a semicircle at the tip, we can find the conact point by comparing the delta x and delta y from the base of the finger line to the contact point on the object
 class ContactPoint:
-    def __init__(self, object_size = 39.0, distal_length = 72.0, sleeve_length = 50.0) -> None:
+    def __init__(self, object_size = 39.0, distal_length = 72.0, sleeve_length = 50.0, side = "L") -> None:
         # Set up variables for future use
 
         # Set up object side length (in mm)
@@ -24,6 +24,8 @@ class ContactPoint:
 
         self.dist_joint_to_red = distal_length - sleeve_length + spacing
         self.first = True
+
+        self.side = "L"
 
         
     def find_closest_point(self, finger_line, object_line):
@@ -224,6 +226,31 @@ class ContactPoint:
         # If the angle to world is 0, then straight up relative to the palm
         # If angle to world is > 0 (positive), then angled inwards
         # If angle to world is < 0 (negative), then angled outwards
+
+        # Check if within .4 rad
+        if np.abs(world_ang) <= (np.pi/2 +.4) and np.abs(world_ang) >= (np.pi/2 -.4):
+            # Then we set it based on x instead of y
+            if self.side == "L":
+                # X should be more negative for the base
+                if finger_points[0][0] <= finger_points[1][0]:
+                    # Check if order of points is currently correct (first point is close to joint, second is tip)
+                    output_finger_points = finger_points
+                else: 
+                    # Flip orientation of points
+                    output_finger_points[0][:] = finger_points[1][:]
+                    output_finger_points[1][:] = finger_points[0][:]
+            if self.side == "R":
+                # X should be more positive for the base
+                if finger_points[0][0] >= finger_points[1][0]:
+                    # Check if order of points is currently correct (first point is close to joint, second is tip)
+                    output_finger_points = finger_points
+                else: 
+                    # Flip orientation of points
+                    output_finger_points[0][:] = finger_points[1][:]
+                    output_finger_points[1][:] = finger_points[0][:]
+            return output_finger_points
+
+
         
         # Essentially, just get the first point to be associated to the base of the link (joint to previous link)
         if np.abs(world_ang) <= np.pi/2:
@@ -309,10 +336,12 @@ class ContactPoint:
         contact_point_delta[0] = rotated[0][1]-rotated[0][0]
         contact_point_delta[1] = rotated[1][1]-rotated[1][0]
 
+        print(f"Right finger array: {finger_array}, delta: {contact_point_delta}, contact: {contact_point}")
+
         return contact_point_delta
 
 
-    def contact_point_calculation(self, object_pose = [0.0,0.0,0.0], finger_points = [[0.0,0.0],[1.0,0.0]], joint_angles = [0.0, 0.0]):
+    def contact_point_calculation(self, object_pose = [0.0,0.0,0.0], finger_points = [[0.0,0.0],[1.0,0.0]], joint_angles = [0.0, 0.0], side = "L"):
         """ Uses all of the other finctions to find the contact point and return the contact point delta in the distal frame
 
         Args:
@@ -326,7 +355,7 @@ class ContactPoint:
         Returns:
             contact_delta (list): The [x, y] delta of the contact point in the frame of the distal link (x should be negative, y positive in all cases)
         """
-
+        self.side = side
         # Create the object segments
         object = self.create_object_segments(self.object_size, object_pose)
 

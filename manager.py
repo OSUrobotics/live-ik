@@ -21,44 +21,38 @@ class ik_manager:
         # General camera parameters
         self.camera_calibration = np.array(((587.65822288, 0.0, 312.22279429),(0.0, 587.25425585, 242.52669574),(0.0, 0.0, 1.00000000)))
         self.r_t_dists = np.array((.0744065755, .144374443, -.000463894288, -.00363146720, -1.13198957))
-        #old self.camera_calibration = np.array(((591.40261976, 0.0, 323.94871535),(0.0, 593.59306833, 220.0225822),(0.0, 0.0, 1.00000000)))
-        #old self.r_t_dists = np.array((0.07656341,  0.41328222, -0.02156859,  0.00270287, -1.64179927))
 
-        self.initial_pose = [0.0, 0.0, 0.0]
+        self.initial_pose = [0.0, 0.0, 0.0] # Stores the first pose to use for relative calculations
 
+        # Defining the asterisk directions for a standard 39 mm object
+        #"SW": np.array([-0.135, -.0433]),
+        #SW": np.array([-0.165, -.0433]),
         self.f1_direction_dict = {
-            "N": np.array([0.01, .15]),
-            "NE": np.array([0.2, .2]),
-            "E": np.array([0.2, .1067]),
-            "SE": np.array([.2, 0]),
-            "S": np.array([0.01, .05]),
-            "SW": np.array([-0.18, 0]),
-            "W": np.array([-0.18, .1067]),
-            "NW": np.array([-0.18, .2])}
+            "N": np.array([0.015, .1567]),
+            "NE": np.array([0.065, .1567]),
+            "E": np.array([0.165, .1067]),
+            "SE": np.array([.165, -.0433]),
+            "S": np.array([0.015, -.0433]),
+            "SW": np.array([-0.135, -.0433]),
+            "W": np.array([-0.135, .1067]),
+            "NW": np.array([-0.035, .1567])}
         self.f2_direction_dict = {
-            "N": np.array([-0.01, .15]),
-            "NE": np.array([0.18, .2]),
-            "E": np.array([0.18, .1067]),
-            "SE": np.array([0.18, 0]),
-            "S": np.array([-0.01, .05]),
-            "SW": np.array([-0.2, 0]),
-            "W": np.array([-0.2, .1067]),
-            "NW": np.array([-0.2, .2])}
+            "N": np.array([-0.015, .1567]),
+            "NE": np.array([.035, .1567]),
+            "E": np.array([0.135, .1067]),
+            "SE": np.array([0.135, -.0433]),
+            "S": np.array([-0.015, -.0433]),
+            "SW": np.array([-0.165, -.0433]),
+            "W": np.array([-0.165, .1067]),
+            "NW": np.array([-0.065, .1567])}
 
-        self.palm_shift = .1 # .1 m from object to palm
+        # Store the distace of the object from the palm (in y)
+        self.palm_shift = .1067 # .1 m from object to palm
     
-    def live_run(self):
-        # Set up the IK
-        testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [.03, 0, 0]},
-            "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [-.03, 0, 0]}}
-        ik_left = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
-        ik_right = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
-
-        # Now 
-
+    def live_run(self, direction = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"], image_wait: int = 20):
 
         # Ok, so we start by setting up the classes
-        ## ARUCO
+        ## ARUCO TRACKING
         ARUCO_PARAMS = {"aruco_dict": cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250), 
                         "aruco_params": cv2.aruco.DetectorParameters_create(),
                         "marker_side_dims": 0.03,
@@ -66,57 +60,84 @@ class ik_manager:
                         "opencv_radial_and_tangential_dists": self.r_t_dists
                         }
         at = aruco.Aruco_Track(ARUCO_PARAMS)
-        ## CONTOUR
+        ## CONTOUR FINDING
         contour = ContourFind()
-        ## CONTACT
+        ## CONTACT CALCULATIONS
         contact = ContactPoint()
-        ## DYNAMIXEL
-        self.dyn_replay_setup()
+        # INVERSE KINEMATICS
+        testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [.029, 0, 0]},
+            "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [-.029, 0, 0]}}
+        ik_left = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
+        ik_right = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
+
+        ## DYNAMIXEL setup
+        self.dyn_replay_setup(hand_type="2v2")
+        self.dynamixel_control.update_PID(85,25,45)
+        #self.dynamixel_control.update_speed(50)
+
 
         # Move Dynamixels to starting position
         self.dynamixel_control.go_to_initial_position()
 
-        #input("Press enter to coninue.")
-        #print("You have 3 seconds to reset")
+        # Wait for user input to start
         input("enter to continue")
         # Start RealSense
         at.start_realsense()
-        #sleep(1)
+
         first_time = True
-        first_counter = 0 
+        frame_counter = 0 
         while True:
             # Get the color image and point data
             color_image, vtx = at.get_frame()
 
-            if first_counter < 20:
-                first_counter+=1
+            if color_image is None or vtx is None:
+                # Check that we actually recived an image and points
+                continue
+
+            # Wait for the first predetermined number of frames before performing calculations
+            if frame_counter < 20:
+                frame_counter+=1
                 continue
 
             # Get our current object pose in pixel coordinates
-            current_pose, corners, ids = at.object_pose(color_image, vtx, True)
+            current_pose, _, _ = at.object_pose(color_image, vtx, True)
             if not current_pose.any():
+                # If unable to determine a pose, continue
                 continue
-            
         
             # Get the contours back in pixel coordinates
-            f1_contour, f2_contour, orig_c1, orig_c2 = contour.find_countours(color_image)
-            if f1_contour is not None:
-                contour_image = cv2.drawContours(color_image, [orig_c1, orig_c2], -1, (0, 255, 0), 3)
-                
+            f_l_contour, f_r_contour, orig_c_left, orig_c_right = contour.find_countours(color_image)
 
+              
             # Convert from from pixel coordinates to m w/ depth data
             object_pose = self._pix_to_m(current_pose[0:2], vtx)
             if first_time:
+                # If this is the first frame we are capturing, save this as our intial position to use for relative calculations
                 first_time = False
                 self.initial_pose = object_pose
                 continue
 
-            finger_1_contour_m = self._pix_to_m(f1_contour, vtx)
-            finger_2_contour_m = self._pix_to_m(f2_contour, vtx)
+            finger_l_contour_m = self._pix_to_m(f_l_contour, vtx)
+            finger_r_contour_m = self._pix_to_m(f_r_contour, vtx)
+                        # Get the current motor positions
+            self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
+            m0 = self.dynamixel_control.dxls[0].read_position_m # Get the position of motor 0 - right bottom
+            m1 = self.dynamixel_control.dxls[1].read_position_m # Get the position of motor 1 - right top
+            m2 = self.dynamixel_control.dxls[2].read_position_m # Get the position of motor 2 - left bottom
+            m3 = self.dynamixel_control.dxls[3].read_position_m # Get the position of motor 3 - left top
+
+            joint_right = [m0, m1]
+            joint_left = [m2, m3]
+            # Update our angles in the FK with current motor angles
+            ik_left.update_angles = joint_left
+            ik_right.update_angles = joint_right
 
             # Take the contours and object pose and calculate contact points
-            contact_point_l, contact_delta_l = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_1_contour_m)
-            contact_point_r, contact_delta_r = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_2_contour_m)
+            contact_point_l, contact_delta_l = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_l_contour_m, [m2, m3], "L")
+            contact_point_r, contact_delta_r = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_r_contour_m, [m0, m1], "R")
+
+            contact_delta_l[1] = min(contact_delta_l[1], .072)
+            contact_delta_r[1] = min(contact_delta_r[1], .072)
 
             # For plotting, calculate the pixels per mm
             test_obj = np.array([current_pose[0]+10, current_pose[1]])
@@ -127,25 +148,31 @@ class ik_manager:
             test_obj_mm = self._pix_to_m(test_obj, vtx)
             diff_y = test_obj_mm[1] - object_pose[1] # Distance per 10 pixels in y
 
-            # Now take a find the contact point's number of pixels 
+            # Check that we have valid pixels per mm
             if np.isclose(diff_x, 0.0) or np.isclose(diff_y, 0.0):
                 continue
-            x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
-            y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
-            #print(f"X_l: {x_l}, object: {current_pose[0]}, combined: {x_l +current_pose[0]}")
-            #print(f"Y: {y_l}, object: {current_pose[1]}, combined: {y_l +current_pose[1]}")
-            # Now take a find the contact point's number of pixels 
+
+            # Now take a find the right contact point's number of pixels 
             x_r = int(10*(object_pose[0]-contact_point_r[0])/diff_x) 
             y_r = int(10*(object_pose[1]-contact_point_r[1])/diff_y)
-            #print(f"X_l: {x_r}, object: {current_pose[0]}, combined: {x_r +current_pose[0]}")
-            #print(f"Y: {y_r}, object: {current_pose[1]}, combined: {y_r +current_pose[1]}")
 
-            #Draw a red circle with zero radius and -1 for filled circle
-            image2 = cv2.circle(color_image, (int(current_pose[0]-x_l),int(current_pose[1]+y_l)), radius=3, color=(0, 0, 255), thickness=-1)
-            image3 = cv2.circle(color_image, (int(current_pose[0]-x_r),int(current_pose[1]+y_r)), radius=3, color=(255, 0, 0), thickness=-1)
+            # Now take and find the left contact point's number of pixels 
+            x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
+            y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
 
-            #cv2.imshow("hi", image3)
-            #cv2.waitKey(500)
+
+            show_image = True
+            if show_image:
+                # Draw contours        
+                contour_image = cv2.drawContours(color_image, [orig_c_left, orig_c_right], -1, (0, 255, 0), 3)
+                
+                # Draw a red circle with zero radius and -1 for filled circle
+                image2 = cv2.circle(color_image, (int(current_pose[0]-x_l),int(current_pose[1]+y_l)), radius=3, color=(0, 0, 255), thickness=-1)
+                image3 = cv2.circle(color_image, (int(current_pose[0]-x_r),int(current_pose[1]+y_r)), radius=3, color=(255, 0, 0), thickness=-1)
+
+                cv2.imshow("hi", image3)
+                cv2.waitKey(5)
+                
             
             # Calculate the relative pose for the IK solver
             # Object starts 10cm from the joints
@@ -154,17 +181,6 @@ class ik_manager:
 
             # Left finger has joints 0 and 1
 
-            
-            self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
-            m0 = self.dynamixel_control.dxls[0].read_position # Get the position of motor 0
-            m1 = self.dynamixel_control.dxls[1].read_position # Get the position of motor 1
-            m2 = self.dynamixel_control.dxls[2].read_position # Get the position of motor 2
-            m3 = self.dynamixel_control.dxls[3].read_position # Get the position of motor 3
-
-            joint_a = [m2, m3, m0, m1]
-            # Update our angles in the FK 
-            ik_left.update_angles = joint_a
-            ik_right.update_angles = joint_a
 
 
             # We need to get the target
@@ -177,52 +193,84 @@ class ik_manager:
             2) Take that point and translate it the amount of the starting position of the object (to get it relative to 0,0 of starting object)
             3) Translate the point 10 cm in y (get relative to palm base, not initial object position)
             """
-            l_point = self.step_towards_goal(contact_point_l, self.f1_direction_dict["E"], .025)
-            shifted_by_start_l = [l_point[0]-self.initial_pose[0], l_point[1]-self.initial_pose[1]]
+            # Calculate the target point for the left finger
+            shifted_by_start_l = [contact_point_l[0]-self.initial_pose[0], contact_point_l[1]-self.initial_pose[1]]
             shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
+            l_point = self.step_towards_goal(shifted_by_palm_l, self.f2_direction_dict["NW"], .02) # was .02 with smoothing
+            
 
-            r_point = self.step_towards_goal(contact_point_r, self.f2_direction_dict["E"], .025)
-            shifted_by_start_r = [r_point[0]-self.initial_pose[0], r_point[1]-self.initial_pose[1]]
+            #l_point = self.step_towards_goal(contact_point_l, self.f1_direction_dict["E"], .02)
+            #shifted_by_start_l = [l_point[0]-self.initial_pose[0], l_point[1]-self.initial_pose[1]]
+            #shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
+
+            # # Calculate the target point for the right finger
+            shifted_by_start_r = [contact_point_r[0]-self.initial_pose[0], contact_point_r[1]-self.initial_pose[1]]
             shifted_by_palm_r = [shifted_by_start_r[0], shifted_by_start_r[1]+self.palm_shift]
-            #p#rint(f"Contact: {contact_point_l}, Shifted {shifted_by_palm_l}")
-            #p#rint(f"Contact in frame: {contact_delta_l}")
+            r_point = self.step_towards_goal(shifted_by_palm_r, self.f1_direction_dict["NW"], .02)
 
             
-            #sleep(5)
-            # Now we calculate the ik
+            # Calculate the inverse kinematics for each finger
+            print(f"L: {contact_delta_l}, R: {contact_delta_r}")
+            _, new_angles_l, num_itl = ik_left.calculate_ik(target = l_point, ee_location=[contact_delta_l[0], contact_delta_l[1], 1])
+            _, new_angles_r, num_itr = ik_right.calculate_ik(target = r_point, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
+            print(F"Num L: {num_itl}, Num R: {num_itr}")
+            print(f"FK: {ik_right.finger_fk.calculate_forward_kinematics()}")
             
-            _, new_angles_l, _ = ik_left.calculate_ik(target = shifted_by_palm_l, ee_location=[contact_delta_l[0], contact_delta_l[1], 1])
-            _, new_angles_r, _ = ik_right.calculate_ik(target = shifted_by_palm_r, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
-            #print(new_angles_l)
-            print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
-            #print(f"m2: {m2}, m3: {m3}, new_m2: {new_angles_r[0]}, new_m3: {new_angles_r[1]}")
-            
-            #ik_right.calculate_ik(target = 0, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
-            #print(f"M0: {m0}, M1: {m1}")
+            print(f"m0: {m0}, new_m0: {new_angles_r[0]}::: m1: {m1}, new_m1: {new_angles_r[1]}::: m2: {m2}, new_m2: {new_angles_l[0]}::: m3: {m3}, new_m3: {new_angles_l[1]}")
+            print(f"Contact left: {shifted_by_palm_l}, Contact right: {shifted_by_palm_r}")
+            print(f"Target left: {l_point}, Target Right: {r_point}")
+            #print(joint_a)
+            limit = .6
+            if np.abs(new_angles_r[0]-m0) > limit or np.abs(new_angles_r[1]-m1) > limit or np.abs(new_angles_l[0]-m2) > limit or np.abs(new_angles_l[1]-m3) > limit:
+            #     if new_angles_r[0] > 0:
+            #         new_angles_r[0] = min(new_angles_r[0], m0+limit)
+            #     else:
+            #         new_angles_r[0] = max(new_angles_r[0], m0-limit)
 
-            #print(f"Contact l: {contact_delta_l}, Contact r: {contact_delta_r}")
+            #     if new_angles_r[1] > 0:
+            #         new_angles_r[1] = min(new_angles_r[1], m1+limit)
+            #     else:
+            #         new_angles_r[1] = max(new_angles_r[1], m1-limit)
 
-            tes = self.dynamixel_control.dxls[0].goal_position
-            
-            
-            self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_l[0]))
-            self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_l[1]))
-            self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_r[0]))
-            self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(new_angles_r[1]))
-            print(f"Old goal: {tes}, New goal: {self.dynamixel_control.dxls[0].goal_position}, Current pos: {m0}")
-            self.dynamixel_control.send_goal()
-            
+            #     if new_angles_l[0] > 0:
+            #         new_angles_l[0] = min(new_angles_l[0], m2+limit)
+            #     else:
+            #         new_angles_l[0] = max(new_angles_l[0], m2-limit)
 
+            #     if new_angles_l[1] > 0:
+            #         new_angles_l[1] = min(new_angles_l[1], m3+limit)
+            #     else:
+            #         new_angles_l[1] = max(new_angles_l[1], m3-limit)
 
-            
-            
-            #print(finger_1_contour_m)
-            
-                # Save our intiial pose of the object
+                print("Bad value")
+                continue
                 
-            #if not dy.is_alive():
-            #    print("Finished moving")
-            #    break
+            #print(f"Left Contact: {contact_point_l}, Left New: {l_point}")
+            #print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
+            #
+            # TODO: Add check that verifies the differnce between all of the angles and the old is not excessive
+            #print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
+            num = 10
+            goal0 = np.linspace(m0, new_angles_r[0], num)
+            goal1 = np.linspace(m1, new_angles_r[1], num)
+            goal2 = np.linspace(m2, new_angles_l[0], num)
+            goal3 = np.linspace(m3, new_angles_l[1], num)
+            for i in range(num):
+                # Update all the positions with the following: center_position + difference in 0-1023 scale
+                self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0[i]))#+self.dynamixel_control.dxls[0].shift)
+                self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1[i]))#+self.dynamixel_control.dxls[1].shift)
+                self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2[i]))#+self.dynamixel_control.dxls[2].shift)
+                self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3[i]))#+self.dynamixel_control.dxls[3].shift)
+
+                print(f"Goal: {self.dynamixel_control.dxls[0].goal_position}, Previous Reading: {self.dynamixel_control.dxls[0].read_position}")
+
+                #tes = self.dynamixel_control.dxls[0].goal_position
+                #print(f"Old goal: {tes}, New goal: {self.dynamixel_control.dxls[0].goal_position}, Current pos: {m0}")
+                self.dynamixel_control.send_goal()
+                sleep(.05)
+
+
+            
 
     def step_towards_goal(self, start_vec, end_vec, distance):
         temp_x = end_vec[0] - start_vec[0]
@@ -238,12 +286,17 @@ class ik_manager:
 
 
 
-    def dyn_replay_setup(self):
+    def dyn_replay_setup(self, hand_type = "2v2"):
         self.dynamixel_control = dynamixel_control.Dynamixel()
-        self.dynamixel_control.add_dynamixel(self.dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 450, 1023], shift = -25)) # Negative on left side
-        self.dynamixel_control.add_dynamixel(self.dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 553, 1023], shift = 0))
-        self.dynamixel_control.add_dynamixel(self.dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 465, 1023], shift = 25)) # Positive on right side
-        self.dynamixel_control.add_dynamixel(self.dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 545, 1023], shift = 0))
+
+        if hand_type == "2v2":
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 465, 1023], shift = 25) # Negative on left side was -25
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 545, 1023], shift = 0)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 450, 1023], shift = -25) # Positive on right side was 25
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 553, 1023], shift = 0)
+        elif hand_type == "3v3":
+            print("not implemented")
+            pass
 
         self.dynamixel_control.setup_all()
         

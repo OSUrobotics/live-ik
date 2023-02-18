@@ -9,6 +9,10 @@ class Dxl:
 
         if dxl_dict["type"] == "XL-320":
             # Table values that corespond to the Dynamixel XL-320
+            self.ADDR_P                      = 29
+            self.ADDR_D                      = 27
+            self.ADDR_I                      = 28
+            self.LEN_PID                     = 1
             self.ADDR_TORQUE_ENABLE          = 24
             self.ADDR_LED_RED                = 65
             self.LEN_LED_RED                 = 1         # Data Byte Length
@@ -44,6 +48,7 @@ class Dxl:
 
         # Set the starting goal position as the calibrated center positions
         self.read_position = calibration[1]
+        self.read_position_rad = 0.0
         self.goal_position = calibration[1]
         self.current_torque = 0
 

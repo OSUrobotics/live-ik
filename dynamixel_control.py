@@ -20,6 +20,7 @@ class Dynamixel:
 
         # Create flag for first bulk read
         self.first_bulk_read = True
+        self.flag = False
         
 
         # Initialize PacketHandler instance
@@ -70,7 +71,7 @@ class Dynamixel:
                           "shift": shift}
         return dynamixel_dict
 
-    def add_dynamixel(self, dyn_dict):
+    def add_dynamixel(self, type = "XL-320", ID_number = 0, calibration = [0, 511, 1023], shift = 0):
         """ Creates a Dxl bject and adds it to our dictionary based on the parameters passed in.
 
         Args:
@@ -78,12 +79,10 @@ class Dynamixel:
         Returns:
             none
         """
+        dyn_dict = self.create_dynamixel_dict(type, ID_number, calibration, shift)
         
-        # Get the ID number for easy reference
-        id_num = dyn_dict["ID_number"]
-
         # Create a Dxl object and add it to our dictionary
-        self.dxls[id_num] = dynamixel.Dxl(dyn_dict)
+        self.dxls[ID_number] = dynamixel.Dxl(dyn_dict)
 
     def enable_torque(self, id: int, enable: bool = True):
         """ Enables or disables torque for one Dynamixel.
@@ -180,7 +179,12 @@ class Dynamixel:
 
             # Saves position read in each Dxl object
             #test = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
-            self.dxls[id].read_position = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos - self.dxls[id].shift)
+            self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
+            if self.flag:
+                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos - self.dxls[id].shift)
+            else:
+                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos)
+  
             #if id ==3:
 
             #    print(f"Val: {test}, Rad: {self.dxls[id].read_position}")
@@ -220,7 +224,93 @@ class Dynamixel:
             
         self.groupBulkRead.clearParam()
 
+    def update_PID(self, P = 36, I = 0, D = 0):
+        """ Updates the PID constants for all Dynamixels 
 
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
+        # Loop through all Dxls
+        for id in self.dxls.keys():
+            dxl = self.dxls[id]
+            #param_P = [DXL_LOBYTE(DXL_LOWORD(P)), DXL_HIBYTE(DXL_LOWORD(P)), DXL_LOBYTE(DXL_HIWORD(P)), DXL_HIBYTE(DXL_HIWORD(P))]
+            # Add Dynamixel goal position value to the Bulkwrite parameter storage
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_P, dxl.LEN_PID, [P])
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkWrite addparam failed" % id)
+                print("wtf")
+                quit()
+        # Bulkwrite PID vaues
+        dxl_comm_result = self.groupBulkWrite.txPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+
+        # Clear bulkwrite parameter storage
+        self.groupBulkWrite.clearParam()
+        for id in self.dxls.keys():
+            dxl = self.dxls[id]
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_I, dxl.LEN_PID, [I])
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkWrite addparam failed" % id)
+                print("wtf2")
+                quit()
+        # Bulkwrite PID vaues
+        dxl_comm_result = self.groupBulkWrite.txPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+
+        # Clear bulkwrite parameter storage
+        self.groupBulkWrite.clearParam()
+        for id in self.dxls.keys():
+            dxl = self.dxls[id]
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_D, dxl.LEN_PID, [D])
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkWrite addparam failed" % id)
+                quit()
+        
+        # Bulkwrite PID vaues
+        dxl_comm_result = self.groupBulkWrite.txPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+
+        # Clear bulkwrite parameter storage
+        self.groupBulkWrite.clearParam()
+
+    def update_speed(self, speed=500):
+        """ Updates the PID constants for all Dynamixels 
+
+        Args:
+            none
+        
+        Returns:
+            none
+        
+        """
+
+        # Loop through all Dxls
+        for id in self.dxls.keys():
+            dxl = self.dxls[id]
+            param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
+            # Add Dynamixel goal position value to the Bulkwrite parameter storage
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, 32, 2, param_speed)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupBulkWrite addparam failed" % id)
+                print("wtf")
+                quit()
+        # Bulkwrite PID vaues
+        dxl_comm_result = self.groupBulkWrite.txPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+
+        # Clear bulkwrite parameter storage
+        self.groupBulkWrite.clearParam()
+
+    
     def send_goal(self):
         """ Writes goal positions to all Dynamixels based on goal position stored in each Dxl object.
 
@@ -237,7 +327,11 @@ class Dynamixel:
             dxl = self.dxls[id]
 
             # Adjust goal by shift 
-            goal = dxl.goal_position + dxl.shift
+            if self.flag:
+                goal = dxl.goal_position + dxl.shift
+
+            else:
+                goal = dxl.goal_position
 
             param_goal_position = [DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)), DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal))]
             # Add Dynamixel goal position value to the Bulkwrite parameter storage
@@ -245,6 +339,7 @@ class Dynamixel:
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 quit()
+        #self.flag = False
         
         # Bulkwrite goal position and LED value
         # TODO: Add LED value stuff at some point if we want??
@@ -304,7 +399,10 @@ class Dynamixel:
         file_path = os.path.join(path_to, file_location, file_name)
     
         with open(file_path, 'rb') as f:
-            data = pkl.load(f)
+            self.data = pkl.load(f)
+
+
+        return len(self.data)
 
         for id in self.dxls.keys():
             name = "joint_" + str(id+1)
@@ -354,7 +452,8 @@ class Dynamixel:
 
         # Set the positions in terms of actual calibrated motor positions
         for id in self.dxls.keys():
-            self.dxls[id].goal_position = self.dxls[id].center_pos - self.dxls[id].joint_angles_pickle[i]
+            self.dxls[id].goal_position = self.dxls[id].center_pos + self.convert_rad_to_pos(self.data[i]["joint_" + str(id+1)])
+            #self.dxls[id].joint_angles_pickle[i]
 
 
     def replay_pickle_data(self, file_location="Open_Loop_Data", file_name="angles_N.pkl", delay_between_steps: float = .01):
@@ -368,13 +467,14 @@ class Dynamixel:
                 self.map_pickle(i)
                 self.send_goal()
                 sleep(delay_between_steps)
-                self.bulk_read_pos()
+                #self.bulk_read_pos()
 
         except KeyboardInterrupt:
             self.end_program()
 
-    def go_to_initial_position(self, file_location="Open_Loop_Data", file_name="angles_N.pkl"):
+    def go_to_initial_position(self, file_location="actual_trajectories_2v2", file_name="N_2v2_1.1_1.1_1.1_1.1.pkl"):
         try: 
+            self.flag = True
             pickle_length = self.load_pickle(file_location, file_name)
             self.map_pickle(0)
             self.send_goal()
@@ -385,14 +485,18 @@ class Dynamixel:
 
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=0, calibration=[0, 450, 1023], shift = -30)) # Negative on left side
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=1, calibration=[0, 553, 1023], shift = 0))
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=2, calibration=[0, 465, 1023], shift = 30)) # Positive on right side
-    Dynamixel_control.add_dynamixel(Dynamixel_control.create_dynamixel_dict(ID_number=3, calibration=[0, 545, 1023], shift = 0))
+    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 465, 1023], shift = 35) # Negative on left side was -25
+    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 545, 1023], shift = 0)
+    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 450, 1023], shift = -35) # Positive on right side was 25
+    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 553, 1023], shift = 0)
+    #450, 553, 465, 545
 
 
 
     Dynamixel_control.setup_all()
-    Dynamixel_control.replay_pickle_data(file_name="angles_N.pkl", delay_between_steps = .005)
+    Dynamixel_control.update_PID()
+    Dynamixel_control.update_speed(255)
+    print("PID done")
+    Dynamixel_control.replay_pickle_data(file_location = "actual_trajectories_2v2",file_name="SW_2v2_1.1_1.1_1.1_1.1.pkl", delay_between_steps = 0)
 
     

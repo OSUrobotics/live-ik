@@ -121,6 +121,15 @@ class Aruco_Track:
         print("RealSense success")
 
     def get_frame(self):
+        """Get the color frames and depth data from the RealSense and return them
+
+        Args:
+            none
+
+        Returns:
+            color_image (array): Color image returned as an array
+            vtx (array): Depth and x,y data for each pixel
+        """
         try:
             while True:
                 # Wait for a coherent pair of frames: depth and color
@@ -150,16 +159,8 @@ class Aruco_Track:
                 
         except Exception as e:
             print(e)
+            return None, None
             
-        #finally:
-         #   # Stop streaming
-         #   print("Stopping RealSense pipeline")
-          #  self.pipe.stop()
-         #   print("RealSense pipeline stopped")
-
-
-
-
 
     def save_frames(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1, contact = True):
         """Get the color frames from the RealSense and save them to the the provided folder. To be used with post-processing, Asterisk analysis, and live IK.
@@ -413,45 +414,6 @@ class Aruco_Track:
 
             self.updated = True
             self.c = [c1, c2]
-
-
-
-
-        #rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.ARUCO_PARAMS["marker_side_dims"], self.ARUCO_PARAMS["opencv_camera_calibration"], self.ARUCO_PARAMS["opencv_radial_and_tangential_dists"])
-
-        #if self.first_trial:
-        #    if rvec is None:
-        #        print("No Aruco marker in the first frame!!")
-        #    else:
-        #        # If the first run, save the starting position to use for relative calculations
-        #        self.first_trial = False#
-        #
-        #        self.first_corner = corn    ers
-        #        self.first_rvec = rvec
-        #        self.first_tvec = tvec
-        #else:
-            # Save the relative position position
-         #   self.current_pos = self.calc_poses(corners, rvec, tvec)
-            #print(self.current_pos)
-            #y = threading.Thread(target=self.fun_things, args=(), daemon=True)
-            #y.start()
-            # Now we calculate the contours
-            #f_1, f_2 = self.contour.find_countours(color_image)
-            #if f_1 is not None:
-                    
-            #    self.finger_1 = [[self.vtx[f_1[0][0]][f_1[0][1]][0], self.vtx[f_1[0][0]][f_1[0][1]][1]], [self.vtx[f_1[1][0]][f_1[1][1]][0], self.vtx[f_1[1][0]][f_1[1][1]][1]]]
-            #    self.finger_2 = [[self.vtx[f_2[0][0]][f_2[0][1]][0], self.vtx[f_2[0][0]][f_2[0][1]][1]], [self.vtx[f_2[1][0]][f_2[1][1]][0], self.vtx[f_2[1][0]][f_2[1][1]][1]]]
-                #print("f_1")
-                #print(self.vtx[f_1[0][0]])
-                #print("f_2")
-                #print(self.finger_2)
-                #print("ho")
-            #    self.updated = True
-
-                #if not self.fing_1_contact == None:
-                #    image = cv2.circle(image, f_1, radius, color, thickness)
-                 #   cv2.imshow("current", color_image)
-
    
    
     def object_pose(self, color_image, vtx, first_trial = False):
@@ -465,10 +427,6 @@ class Aruco_Track:
             self.first_trial = False
             
             pose = self.get_square_pose(corners[0][0])
-            #x, y = self.pix_to_m(pose)
-
-            # Update our pose
-            #current_pose = [x, y, pose[2]]
         elif first_trial:
             pose = None
             print("No Aruco marker in the first frame!!")
@@ -513,22 +471,9 @@ class Aruco_Track:
         # Find contours
         f_1, f_2, c1, c2 = self.contour.find_countours(color_image)
         if f_1 is not None:   
-            #self.finger_1 = [[-self.vtx[f_1[0][1]][f_1[0][0]][0], self.vtx[f_1[0][1]][f_1[0][0]][1]], [-self.vtx[f_1[1][1]][f_1[1][0]][0], self.vtx[f_1[1][1]][f_1[1][0]][1]]]
-            #self.finger_2 = [[-self.vtx[f_2[0][1]][f_2[0][0]][0], self.vtx[f_2[0][1]][f_2[0][0]][1]], [-self.vtx[f_2[1][1]][f_2[1][0]][0], self.vtx[f_2[1][1]][f_2[1][0]][1]]]
-
-            #self.updated = True
-            #self.c = [c1, c2]
             return f_1, f_2, c1, c2
         return None, None, None, None
 
-        
-
-        
-
-    #def fun_things(self):
-    #    print("hi")
-    #    sleep(1)
-    #    print("ho")
 
     def live_plotting(self):
         fig, ax = plt.subplots(figsize=(15, 12))
