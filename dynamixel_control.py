@@ -290,14 +290,24 @@ class Dynamixel:
         Returns:
             none
         
-        """
+        """     
+        for id in self.dxls.keys():  
+            dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, id, 32, speed)
+            if dxl_comm_result != COMM_SUCCESS:
+                print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+            elif dxl_error != 0:
+                print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+            else:
+                print("Dynamixel#0 has been successfully speed")
 
+        return
         # Loop through all Dxls
         for id in self.dxls.keys():
             dxl = self.dxls[id]
-            param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
+            param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_LOWORD(speed)), DXL_LOBYTE(DXL_HIWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
+            #param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
             # Add Dynamixel goal position value to the Bulkwrite parameter storage
-            dxl_addparam_result = self.groupBulkWrite.addParam(id, 32, 2, param_speed)
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, 32, 4, param_speed)
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 print("wtf")
@@ -333,9 +343,17 @@ class Dynamixel:
             else:
                 goal = dxl.goal_position
 
-            param_goal_position = [DXL_LOBYTE(DXL_LOWORD(goal)), DXL_HIBYTE(DXL_LOWORD(goal)), DXL_LOBYTE(DXL_HIWORD(goal)), DXL_HIBYTE(DXL_HIWORD(goal))]
-            # Add Dynamixel goal position value to the Bulkwrite parameter storage
-            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_GOAL_POSITION, dxl.LEN_GOAL_POSITION, param_goal_position)
+
+            #dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, id, 30, goal)
+            ##if dxl_comm_result != COMM_SUCCESS:
+            #    print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+            #elif dxl_error != 0:
+            #    print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+
+
+            param_goal_position = [DXL_LOBYTE(goal), DXL_HIBYTE(goal)]
+            ## Add Dynamixel goal position value to the Bulkwrite parameter storage
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_GOAL_POSITION, 2, param_goal_position) #"""dxl.LEN_GOAL_POSITION"""
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 quit()
@@ -360,6 +378,10 @@ class Dynamixel:
             none
         
         """
+        if new_goal < self.dxls[id].min_bound:
+            new_goal = self.dxls[id].min_bound
+        elif new_goal > self.dxls[id].max_bound:
+            new_goal = self.dxls[id].max_bound
         self.dxls[id].goal_position = new_goal
 
         
@@ -473,30 +495,78 @@ class Dynamixel:
             self.end_program()
 
     def go_to_initial_position(self, file_location="actual_trajectories_2v2", file_name="N_2v2_1.1_1.1_1.1_1.1.pkl"):
-        try: 
-            self.flag = True
-            pickle_length = self.load_pickle(file_location, file_name)
-            self.map_pickle(0)
-            self.send_goal()
-        except:
-            self.end_program()
+        #try: 
+        Dynamixel_control.go_to_start()
+        sleep(2)
+        self.flag = True
+        pickle_length = self.load_pickle(file_location, file_name)
+        self.map_pickle(0)
+        self.send_goal()
+        #except:
+            #print("ahhh")
+            #self.end_program()
+
+    def go_to_start(self):
+        #try: 
+        for id in self.dxls.keys():
+            self.update_goal(id, self.dxls[id].center_pos)
+        
+        self.send_goal()
+        #except:
+            #print("ahhh")
+            #self.end_program()
+
+    def test_write(self):
+        # Start by writing the speed value
+        dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, 0, 24, 1)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+        else:
+            print("Dynamixel#0 has been successfully torqued")
+
+        dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, 0, 32, 200)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+        else:
+            print("Dynamixel#0 has been successfully speed")
+
+        dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, 0, 30, 550)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+        else:
+            print("Dynamixel#0 has been successfully sent")
+
 
 
 
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 465, 1023], shift = 35) # Negative on left side was -25
-    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 545, 1023], shift = 0)
-    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 450, 1023], shift = -35) # Positive on right side was 25
-    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 553, 1023], shift = 0)
-    #450, 553, 465, 545
-
-
+    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 550, 1023], shift = 25) # Negative on left side was -25
+    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 546, 1023], shift = 0)
+    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 482, 1023], shift = -25) # Positive on right side was 25
+    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 546, 1023], shift = 0)
+    #4565, 545, 450, 553
 
     Dynamixel_control.setup_all()
-    Dynamixel_control.update_PID()
-    Dynamixel_control.update_speed(255)
+    Dynamixel_control.update_PID(85,25,45)
+    #Dynamixel_control.update_speed(400)
+    #Dynamixel_control.test_write()
+    #input("press enter to continue")
     print("PID done")
+    Dynamixel_control.update_speed(100)
+    #Dynamixel_control.go_to_start()
+    sleep(2)
+    print("Speed done")
+    Dynamixel_control.go_to_initial_position(file_location = "actual_trajectories_2v2",file_name="SW_2v2_1.1_1.1_1.1_1.1.pkl")
+    Dynamixel_control.update_speed(500)
+    print("Speed done")
+    input("Press enter")
     Dynamixel_control.replay_pickle_data(file_location = "actual_trajectories_2v2",file_name="SW_2v2_1.1_1.1_1.1_1.1.pkl", delay_between_steps = 0)
 
     

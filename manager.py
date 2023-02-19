@@ -73,11 +73,13 @@ class ik_manager:
         ## DYNAMIXEL setup
         self.dyn_replay_setup(hand_type="2v2")
         self.dynamixel_control.update_PID(85,25,45)
-        #self.dynamixel_control.update_speed(50)
+        self.dynamixel_control.update_speed(500)
 
 
         # Move Dynamixels to starting position
         self.dynamixel_control.go_to_initial_position()
+        sleep(1)
+        self.dynamixel_control.update_speed(50)
 
         # Wait for user input to start
         input("enter to continue")
@@ -161,7 +163,7 @@ class ik_manager:
             y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
 
 
-            show_image = True
+            show_image = False
             if show_image:
                 # Draw contours        
                 contour_image = cv2.drawContours(color_image, [orig_c_left, orig_c_right], -1, (0, 255, 0), 3)
@@ -196,7 +198,7 @@ class ik_manager:
             # Calculate the target point for the left finger
             shifted_by_start_l = [contact_point_l[0]-self.initial_pose[0], contact_point_l[1]-self.initial_pose[1]]
             shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
-            l_point = self.step_towards_goal(shifted_by_palm_l, self.f2_direction_dict["NW"], .02) # was .02 with smoothing
+            l_point = self.step_towards_goal(shifted_by_palm_l, self.f2_direction_dict["SE"], .015) # was .02 with smoothing
             
 
             #l_point = self.step_towards_goal(contact_point_l, self.f1_direction_dict["E"], .02)
@@ -206,7 +208,7 @@ class ik_manager:
             # # Calculate the target point for the right finger
             shifted_by_start_r = [contact_point_r[0]-self.initial_pose[0], contact_point_r[1]-self.initial_pose[1]]
             shifted_by_palm_r = [shifted_by_start_r[0], shifted_by_start_r[1]+self.palm_shift]
-            r_point = self.step_towards_goal(shifted_by_palm_r, self.f1_direction_dict["NW"], .02)
+            r_point = self.step_towards_goal(shifted_by_palm_r, self.f1_direction_dict["SE"], .015)
 
             
             # Calculate the inverse kinematics for each finger
@@ -250,24 +252,42 @@ class ik_manager:
             #
             # TODO: Add check that verifies the differnce between all of the angles and the old is not excessive
             #print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
-            num = 10
-            goal0 = np.linspace(m0, new_angles_r[0], num)
-            goal1 = np.linspace(m1, new_angles_r[1], num)
-            goal2 = np.linspace(m2, new_angles_l[0], num)
-            goal3 = np.linspace(m3, new_angles_l[1], num)
+            num = 1
+            goal0 = new_angles_r[0]#np.linspace(m0, new_angles_r[0], num)
+            goal1 = new_angles_r[1] #np.linspace(m1, new_angles_r[1], num)
+            goal2 = new_angles_l[0] #np.linspace(m2, new_angles_l[0], num)
+            goal3 = new_angles_l[1] #np.linspace(m3, new_angles_l[1], num)
             for i in range(num):
                 # Update all the positions with the following: center_position + difference in 0-1023 scale
-                self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0[i]))#+self.dynamixel_control.dxls[0].shift)
-                self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1[i]))#+self.dynamixel_control.dxls[1].shift)
-                self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2[i]))#+self.dynamixel_control.dxls[2].shift)
-                self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3[i]))#+self.dynamixel_control.dxls[3].shift)
+                self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0))#+self.dynamixel_control.dxls[0].shift)
+                self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1))#+self.dynamixel_control.dxls[1].shift)
+                self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2))#+self.dynamixel_control.dxls[2].shift)
+                self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3))#+self.dynamixel_control.dxls[3].shift)
 
                 print(f"Goal: {self.dynamixel_control.dxls[0].goal_position}, Previous Reading: {self.dynamixel_control.dxls[0].read_position}")
 
                 #tes = self.dynamixel_control.dxls[0].goal_position
                 #print(f"Old goal: {tes}, New goal: {self.dynamixel_control.dxls[0].goal_position}, Current pos: {m0}")
                 self.dynamixel_control.send_goal()
-                sleep(.05)
+            
+            # Read dynamixel position and wait until within 5% of goal
+            while True:
+                self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
+                current_0 = self.dynamixel_control.dxls[0].read_position_m # Get the position of motor 0 - right bottom
+                current_1 = self.dynamixel_control.dxls[1].read_position_m # Get the position of motor 1 - right top
+                current_2 = self.dynamixel_control.dxls[2].read_position_m # Get the position of motor 2 - left bottom
+                current_3 = self.dynamixel_control.dxls[3].read_position_m # Get the position of motor 3 - left top
+                # m0 is old position
+                # goal 0 is new target
+                # current 0 is current position reading 
+                diff_0 = np.abs(goal0-current_0)/(np.abs(goal0-m0))
+                diff_1 = np.abs(goal1-current_1)/(np.abs(goal1-m1))
+                diff_2 = np.abs(goal2-current_2)/(np.abs(goal2-m2))
+                diff_3 = np.abs(goal3-current_3)/(np.abs(goal3-m3))
+
+                if max(diff_0, diff_1, diff_2, diff_3) < 5.0:
+                    break
+
 
 
             
