@@ -496,7 +496,7 @@ class Dynamixel:
 
     def go_to_initial_position(self, file_location="actual_trajectories_2v2", file_name="N_2v2_1.1_1.1_1.1_1.1.pkl"):
         #try: 
-        Dynamixel_control.go_to_start()
+        self.go_to_start()
         sleep(2)
         self.flag = True
         pickle_length = self.load_pickle(file_location, file_name)

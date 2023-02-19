@@ -73,7 +73,7 @@ class ik_manager:
         ## DYNAMIXEL setup
         self.dyn_replay_setup(hand_type="2v2")
         self.dynamixel_control.update_PID(85,25,45)
-        self.dynamixel_control.update_speed(500)
+        self.dynamixel_control.update_speed(300)
 
 
         # Move Dynamixels to starting position
@@ -285,7 +285,7 @@ class ik_manager:
                 diff_2 = np.abs(goal2-current_2)/(np.abs(goal2-m2))
                 diff_3 = np.abs(goal3-current_3)/(np.abs(goal3-m3))
 
-                if max(diff_0, diff_1, diff_2, diff_3) < 5.0:
+                if max(diff_0, diff_1, diff_2, diff_3) < 10.0:
                     break
 
 
@@ -310,10 +310,10 @@ class ik_manager:
         self.dynamixel_control = dynamixel_control.Dynamixel()
 
         if hand_type == "2v2":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 465, 1023], shift = 25) # Negative on left side was -25
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 545, 1023], shift = 0)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 450, 1023], shift = -25) # Positive on right side was 25
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 553, 1023], shift = 0)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 550, 1023], shift = 20) # Negative on left side was -25
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 546, 1023], shift = 0)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 482, 1023], shift = -20) # Positive on right side was 25
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 546, 1023], shift = 0)
         elif hand_type == "3v3":
             print("not implemented")
             pass
