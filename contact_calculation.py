@@ -336,7 +336,7 @@ class ContactPoint:
         contact_point_delta[0] = rotated[0][1]-rotated[0][0]
         contact_point_delta[1] = rotated[1][1]-rotated[1][0]
 
-        print(f"Right finger array: {finger_array}, delta: {contact_point_delta}, contact: {contact_point}")
+        #print(f"Right finger array: {finger_array}, delta: {contact_point_delta}, contact: {contact_point}")
 
         return contact_point_delta
 

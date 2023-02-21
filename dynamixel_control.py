@@ -22,7 +22,6 @@ class Dynamixel:
         self.first_bulk_read = True
         self.flag = False
         
-
         # Initialize PacketHandler instance
         # Set the protocol version
         # Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
@@ -110,43 +109,29 @@ class Dynamixel:
         elif enable:
             print("Dynamixel#%d has been successfully connected" % id)
 
-    '''
-    def setup_parameters(self, id: int, position = True, torque = True):
-        """ Sets up the parameters to read position
+    def setup_all(self):
+        """ "Starts" all Dynamixels - this enables the torque and sets up the position read parameter
 
         Args:
-            id (int): ID number of Dynamixel
-            position (bool): Whether to set up a position parameter
-            torque (bool): Whether to set up a torque parameter
+            none
         Returns:
             none
         """
-        if position:
+
+        # Loop through the Dynamixels
+        for id in self.dxls.keys():
+            #  Enable torque for all Dyanmixels
+            self.enable_torque(id, True)
+
+            # Setup parameter to read dynamixel position
             # Add parameter storage for Dynamixel present position
             dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkRead addparam failed" % id)
                 quit()
-    '''
-
-
-
-    def setup_all(self):
-        """ "Starts" all Dynamixels - this enables the torque and sets up the position parameter
-
-        Args:
-            none
-        Returns:
-            none
-        """
-
-        #  Enable torque for all Dyanmixels
-        for id in self.dxls.keys():
-            self.enable_torque(id, True)
         
-        # Setup position parameter for all Dynamixels
-        ##for id in self.dxls.keys():
-         #   self.setup_parameters(id)
+        self.first_bulk_read = False
+    
 
     def bulk_read_pos(self):
         """ Check and read current positions from each Dynamixel
@@ -155,48 +140,29 @@ class Dynamixel:
             none
         
         Returns:
-            none
-        
+            none        
         """
 
-        #self.groupBulkRead.txRxPacket()
-
-        # TODO: see if we need checks for each motor here??
-
-        # Must set to 2 bytes otherwise errors!!
-        if self.first_bulk_read: # TODO: THIS IS VERY SLOW TO ADD PARAMS, make sure it doesn't happen live
-            for id in self.dxls.keys():
-                # Add parameter storage for Dynamixel present position
-                dxl_addparam_result = self.groupBulkRead.addParam(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
-                if dxl_addparam_result != True:
-                    print("[ID:%03d] groupBulkRead addparam failed" % id)
-                    quit()
-            self.first_bulk_read = False
-
+        # Read from the Dynamixels
         self.groupBulkRead.txRxPacket()
+        # Must set to 2 bytes otherwise errors!!
 
         for id in self.dxls.keys():
-
             # Saves position read in each Dxl object
-            #test = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
             self.dxls[id].read_position = self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION)
             if self.flag:
-                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos - self.dxls[id].shift)
+                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.dxls[id].read_position - self.dxls[id].center_pos - self.dxls[id].shift)
             else:
-                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.groupBulkRead.getData(id, self.dxls[id].ADDR_PRESENT_POSITION, self.dxls[id].LEN_PRESENT_POSITION) - self.dxls[id].center_pos)
+                self.dxls[id].read_position_m = self.convert_pos_to_rad(self.dxls[id].read_position - self.dxls[id].center_pos)
   
-            #if id ==3:
-
-            #    print(f"Val: {test}, Rad: {self.dxls[id].read_position}")
-            #print(f"Current pos: {self.dxls[id].read_position}")
-
     
     def get_position(self, id: int):
         return self.dxls[id].read_position
 
-
+    
     def bulk_read_torque(self):
-        """ Check and read current positions from each Dynamixel
+        """ NOT IS USE
+        Check and read current positions from each Dynamixel
 
         Args:
             none
@@ -224,34 +190,34 @@ class Dynamixel:
             
         self.groupBulkRead.clearParam()
 
-    def update_PID(self, P = 36, I = 0, D = 0):
+    def update_PID(self, P: int = 36, I: int = 0, D: int = 0):
         """ Updates the PID constants for all Dynamixels 
 
         Args:
-            none
+            P (int): Proportional constant
+            I (int): Integral constant
+            D (int): Derivative constant
         
         Returns:
             none
-        
         """
 
-        # Loop through all Dxls
+        # Loop through all Dxls and update the P value
         for id in self.dxls.keys():
             dxl = self.dxls[id]
-            #param_P = [DXL_LOBYTE(DXL_LOWORD(P)), DXL_HIBYTE(DXL_LOWORD(P)), DXL_LOBYTE(DXL_HIWORD(P)), DXL_HIBYTE(DXL_HIWORD(P))]
-            # Add Dynamixel goal position value to the Bulkwrite parameter storage
             dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_P, dxl.LEN_PID, [P])
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 print("wtf")
                 quit()
-        # Bulkwrite PID vaues
+        # Bulkwrite P values
         dxl_comm_result = self.groupBulkWrite.txPacket()
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-
         # Clear bulkwrite parameter storage
         self.groupBulkWrite.clearParam()
+
+        # Loop through all Dxls and update the I value
         for id in self.dxls.keys():
             dxl = self.dxls[id]
             dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_I, dxl.LEN_PID, [I])
@@ -259,21 +225,21 @@ class Dynamixel:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 print("wtf2")
                 quit()
-        # Bulkwrite PID vaues
+        # Bulkwrite I values
         dxl_comm_result = self.groupBulkWrite.txPacket()
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-
         # Clear bulkwrite parameter storage
         self.groupBulkWrite.clearParam()
+
+        # Loop through all Dxls and update the D value
         for id in self.dxls.keys():
             dxl = self.dxls[id]
             dxl_addparam_result = self.groupBulkWrite.addParam(id, dxl.ADDR_D, dxl.LEN_PID, [D])
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 quit()
-        
-        # Bulkwrite PID vaues
+        # Bulkwrite D values
         dxl_comm_result = self.groupBulkWrite.txPacket()
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
@@ -281,38 +247,26 @@ class Dynamixel:
         # Clear bulkwrite parameter storage
         self.groupBulkWrite.clearParam()
 
-    def update_speed(self, speed=500):
-        """ Updates the PID constants for all Dynamixels 
+    def update_speed(self, speed: int = 500):
+        """ Updates the max speed for all Dynamixels 
 
         Args:
-            none
+            speed (int): Max speed for all Dynamixels
         
         Returns:
             none
+        """    
         
-        """     
-        for id in self.dxls.keys():  
-            dxl_comm_result, dxl_error = self.packetHandler.write2ByteTxRx(self.portHandler, id, 32, speed)
-            if dxl_comm_result != COMM_SUCCESS:
-                print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-            elif dxl_error != 0:
-                print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-            else:
-                print("Dynamixel#0 has been successfully speed")
-
-        return
         # Loop through all Dxls
+        param_speed = [DXL_LOBYTE(speed), DXL_HIBYTE(speed)]
         for id in self.dxls.keys():
-            dxl = self.dxls[id]
-            param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_LOWORD(speed)), DXL_LOBYTE(DXL_HIWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
-            #param_speed = [DXL_LOBYTE(DXL_LOWORD(speed)), DXL_HIBYTE(DXL_HIWORD(speed))]
-            # Add Dynamixel goal position value to the Bulkwrite parameter storage
-            dxl_addparam_result = self.groupBulkWrite.addParam(id, 32, 4, param_speed)
+            # Add Dynamixel max speed value to the Bulkwrite parameter storage
+            dxl_addparam_result = self.groupBulkWrite.addParam(id, 32, 2, param_speed)
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupBulkWrite addparam failed" % id)
                 print("wtf")
                 quit()
-        # Bulkwrite PID vaues
+        # Bulkwrite speed vaues
         dxl_comm_result = self.groupBulkWrite.txPacket()
         if dxl_comm_result != COMM_SUCCESS:
             print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
@@ -567,6 +521,6 @@ if __name__ == "__main__":
     Dynamixel_control.update_speed(500)
     print("Speed done")
     input("Press enter")
-    Dynamixel_control.replay_pickle_data(file_location = "actual_trajectories_2v2",file_name="SW_2v2_1.1_1.1_1.1_1.1.pkl", delay_between_steps = 0)
+    Dynamixel_control.replay_pickle_data(file_location = "actual_trajectories_2v2",file_name="SE_2v2_1.1_1.1_1.1_1.1.pkl", delay_between_steps = 0)
 
     

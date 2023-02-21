@@ -13,7 +13,6 @@ import os
 import importlib  
 hand = importlib.import_module("hand-gen-IK")
 
-
 class ik_manager:
 
     def __init__(self):
@@ -25,8 +24,6 @@ class ik_manager:
         self.initial_pose = [0.0, 0.0, 0.0] # Stores the first pose to use for relative calculations
 
         # Defining the asterisk directions for a standard 39 mm object
-        #"SW": np.array([-0.135, -.0433]),
-        #SW": np.array([-0.165, -.0433]),
         self.f1_direction_dict = {
             "N": np.array([0.015, .1567]),
             "NE": np.array([0.065, .1567]),
@@ -48,8 +45,14 @@ class ik_manager:
 
         # Store the distace of the object from the palm (in y)
         self.palm_shift = .1067 # .1 m from object to palm
+
+        self.move_complete = True
+        self.done = False
+        self.block = True # Blocking variable to prevent reading at the same time as writing
     
-    def live_run(self, direction = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"], image_wait: int = 20):
+    def live_run(self, direction = "NW", hand_name = "2v2", ratios="1.1_1.1_1.1"):
+
+        
 
         # Ok, so we start by setting up the classes
         ## ARUCO TRACKING
@@ -73,22 +76,23 @@ class ik_manager:
         ## DYNAMIXEL setup
         self.dyn_replay_setup(hand_type="2v2")
         self.dynamixel_control.update_PID(85,25,45)
-        self.dynamixel_control.update_speed(300)
-
-
+        self.dynamixel_control.update_speed(200)
         # Move Dynamixels to starting position
         self.dynamixel_control.go_to_initial_position()
         sleep(1)
         self.dynamixel_control.update_speed(50)
-
         # Wait for user input to start
         input("enter to continue")
+
         # Start RealSense
         at.start_realsense()
 
         first_time = True
         frame_counter = 0 
         while True:
+            if self.done:
+                break
+
             # Get the color image and point data
             color_image, vtx = at.get_frame()
 
@@ -140,31 +144,28 @@ class ik_manager:
 
             contact_delta_l[1] = min(contact_delta_l[1], .072)
             contact_delta_r[1] = min(contact_delta_r[1], .072)
-
-            # For plotting, calculate the pixels per mm
-            test_obj = np.array([current_pose[0]+10, current_pose[1]])
-            test_obj_mm = self._pix_to_m(test_obj, vtx)
-            diff_x = test_obj_mm[0] - object_pose[0] # Distance per 10 pixels in x
-
-            test_obj = np.array([current_pose[0], current_pose[1]-10])
-            test_obj_mm = self._pix_to_m(test_obj, vtx)
-            diff_y = test_obj_mm[1] - object_pose[1] # Distance per 10 pixels in y
-
-            # Check that we have valid pixels per mm
-            if np.isclose(diff_x, 0.0) or np.isclose(diff_y, 0.0):
-                continue
-
-            # Now take a find the right contact point's number of pixels 
-            x_r = int(10*(object_pose[0]-contact_point_r[0])/diff_x) 
-            y_r = int(10*(object_pose[1]-contact_point_r[1])/diff_y)
-
-            # Now take and find the left contact point's number of pixels 
-            x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
-            y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
-
-
+            print("looping")
             show_image = False
             if show_image:
+                # For plotting, calculate the pixels per mm
+                test_obj = np.array([current_pose[0]+10, current_pose[1]])
+                test_obj_mm = self._pix_to_m(test_obj, vtx)
+                diff_x = test_obj_mm[0] - object_pose[0] # Distance per 10 pixels in x
+
+                test_obj = np.array([current_pose[0], current_pose[1]-10])
+                test_obj_mm = self._pix_to_m(test_obj, vtx)
+                diff_y = test_obj_mm[1] - object_pose[1] # Distance per 10 pixels in y
+
+                # Check that we have valid pixels per mm
+                if np.isclose(diff_x, 0.0) or np.isclose(diff_y, 0.0):
+                    continue
+                # Now take a find the right contact point's number of pixels 
+                x_r = int(10*(object_pose[0]-contact_point_r[0])/diff_x) 
+                y_r = int(10*(object_pose[1]-contact_point_r[1])/diff_y)
+
+                # Now take and find the left contact point's number of pixels 
+                x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
+                y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
                 # Draw contours        
                 contour_image = cv2.drawContours(color_image, [orig_c_left, orig_c_right], -1, (0, 255, 0), 3)
                 
@@ -174,105 +175,69 @@ class ik_manager:
 
                 cv2.imshow("hi", image3)
                 cv2.waitKey(5)
-                
+
+            if self.move_complete and not self.done:
+                print("starting thread")
+                self.move_complete = False
+                self.block = True
+                self.move_thread(contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3)
             
-            # Calculate the relative pose for the IK solver
-            # Object starts 10cm from the joints
+    
+    def move_thread(self, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3):
+        dy = threading.Thread(target=self.dyn_move, args=(contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3,), daemon=True)
+        dy.start()
 
-            # We just need to pass in the joint angles and the contact point deltas
-
-            # Left finger has joints 0 and 1
-
-
-
-            # We need to get the target
-            """
-            Target is a point on the line from contact point to goal
-            Where 0,0 is palm center
-
-            So we need to:
-            1) Get point along line from contact to goal
-            2) Take that point and translate it the amount of the starting position of the object (to get it relative to 0,0 of starting object)
-            3) Translate the point 10 cm in y (get relative to palm base, not initial object position)
-            """
-            # Calculate the target point for the left finger
+    def dyn_move(self, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3):
+        # Calculate the target point for the left finger
             shifted_by_start_l = [contact_point_l[0]-self.initial_pose[0], contact_point_l[1]-self.initial_pose[1]]
             shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
-            l_point = self.step_towards_goal(shifted_by_palm_l, self.f2_direction_dict["SE"], .015) # was .02 with smoothing
+            l_point = self.step_towards_goal(shifted_by_palm_l, self.f2_direction_dict[direction], .015) # was .02 with smoothing
             
-
-            #l_point = self.step_towards_goal(contact_point_l, self.f1_direction_dict["E"], .02)
-            #shifted_by_start_l = [l_point[0]-self.initial_pose[0], l_point[1]-self.initial_pose[1]]
-            #shifted_by_palm_l = [shifted_by_start_l[0], shifted_by_start_l[1]+self.palm_shift]
-
             # # Calculate the target point for the right finger
             shifted_by_start_r = [contact_point_r[0]-self.initial_pose[0], contact_point_r[1]-self.initial_pose[1]]
             shifted_by_palm_r = [shifted_by_start_r[0], shifted_by_start_r[1]+self.palm_shift]
-            r_point = self.step_towards_goal(shifted_by_palm_r, self.f1_direction_dict["SE"], .015)
+            r_point = self.step_towards_goal(shifted_by_palm_r, self.f1_direction_dict[direction], .015)
 
-            
             # Calculate the inverse kinematics for each finger
-            print(f"L: {contact_delta_l}, R: {contact_delta_r}")
             _, new_angles_l, num_itl = ik_left.calculate_ik(target = l_point, ee_location=[contact_delta_l[0], contact_delta_l[1], 1])
             _, new_angles_r, num_itr = ik_right.calculate_ik(target = r_point, ee_location=[contact_delta_r[0], contact_delta_r[1], 1])
+            """
+            Debug print statements
             print(F"Num L: {num_itl}, Num R: {num_itr}")
             print(f"FK: {ik_right.finger_fk.calculate_forward_kinematics()}")
-            
+            print(f"L: {contact_delta_l}, R: {contact_delta_r}")
             print(f"m0: {m0}, new_m0: {new_angles_r[0]}::: m1: {m1}, new_m1: {new_angles_r[1]}::: m2: {m2}, new_m2: {new_angles_l[0]}::: m3: {m3}, new_m3: {new_angles_l[1]}")
             print(f"Contact left: {shifted_by_palm_l}, Contact right: {shifted_by_palm_r}")
             print(f"Target left: {l_point}, Target Right: {r_point}")
             #print(joint_a)
+            """
             limit = .6
             if np.abs(new_angles_r[0]-m0) > limit or np.abs(new_angles_r[1]-m1) > limit or np.abs(new_angles_l[0]-m2) > limit or np.abs(new_angles_l[1]-m3) > limit:
-            #     if new_angles_r[0] > 0:
-            #         new_angles_r[0] = min(new_angles_r[0], m0+limit)
-            #     else:
-            #         new_angles_r[0] = max(new_angles_r[0], m0-limit)
-
-            #     if new_angles_r[1] > 0:
-            #         new_angles_r[1] = min(new_angles_r[1], m1+limit)
-            #     else:
-            #         new_angles_r[1] = max(new_angles_r[1], m1-limit)
-
-            #     if new_angles_l[0] > 0:
-            #         new_angles_l[0] = min(new_angles_l[0], m2+limit)
-            #     else:
-            #         new_angles_l[0] = max(new_angles_l[0], m2-limit)
-
-            #     if new_angles_l[1] > 0:
-            #         new_angles_l[1] = min(new_angles_l[1], m3+limit)
-            #     else:
-            #         new_angles_l[1] = max(new_angles_l[1], m3-limit)
-
                 print("Bad value")
-                continue
-                
-            #print(f"Left Contact: {contact_point_l}, Left New: {l_point}")
-            #print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
-            #
-            # TODO: Add check that verifies the differnce between all of the angles and the old is not excessive
-            #print(f"m0: {m0}, m1: {m1}, new_m0: {new_angles_l[0]}, new_m1: {new_angles_l[1]}")
-            num = 1
-            goal0 = new_angles_r[0]#np.linspace(m0, new_angles_r[0], num)
-            goal1 = new_angles_r[1] #np.linspace(m1, new_angles_r[1], num)
-            goal2 = new_angles_l[0] #np.linspace(m2, new_angles_l[0], num)
-            goal3 = new_angles_l[1] #np.linspace(m3, new_angles_l[1], num)
-            for i in range(num):
-                # Update all the positions with the following: center_position + difference in 0-1023 scale
-                self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0))#+self.dynamixel_control.dxls[0].shift)
-                self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1))#+self.dynamixel_control.dxls[1].shift)
-                self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2))#+self.dynamixel_control.dxls[2].shift)
-                self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3))#+self.dynamixel_control.dxls[3].shift)
-
-                print(f"Goal: {self.dynamixel_control.dxls[0].goal_position}, Previous Reading: {self.dynamixel_control.dxls[0].read_position}")
-
-                #tes = self.dynamixel_control.dxls[0].goal_position
-                #print(f"Old goal: {tes}, New goal: {self.dynamixel_control.dxls[0].goal_position}, Current pos: {m0}")
-                self.dynamixel_control.send_goal()
+                self.move_complete = True
+                return
             
-            # Read dynamixel position and wait until within 5% of goal
+            # HERE WE START MOVEMENT thread
+            goal0 = new_angles_r[0]
+            goal1 = new_angles_r[1]
+            goal2 = new_angles_l[0]
+            goal3 = new_angles_l[1]
+            # Update all the positions with the following: center_position + difference in 0-1023 scale
+            self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0))
+            self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1))
+            self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2))
+            self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3))
+            self.dynamixel_control.send_goal()
+            sleep(.05)
+            print(self.block)
+            self.block = False
+            print(self.block)
+            print("here")
+            counter = 0
+            # Read dynamixel position and wait until within 10% of goal
             while True:
-                self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
+                counter += 1
+                #self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
                 current_0 = self.dynamixel_control.dxls[0].read_position_m # Get the position of motor 0 - right bottom
                 current_1 = self.dynamixel_control.dxls[1].read_position_m # Get the position of motor 1 - right top
                 current_2 = self.dynamixel_control.dxls[2].read_position_m # Get the position of motor 2 - left bottom
@@ -284,13 +249,25 @@ class ik_manager:
                 diff_1 = np.abs(goal1-current_1)/(np.abs(goal1-m1))
                 diff_2 = np.abs(goal2-current_2)/(np.abs(goal2-m2))
                 diff_3 = np.abs(goal3-current_3)/(np.abs(goal3-m3))
+                print("here2")
+                if direction == ["W"] or direction == ["NW"] or direction == ["N"] or direction == ["NE"] or direction == ["E"]:
+                    targ = 5.0
+                else: 
+                    targ = 10.0
 
-                if max(diff_0, diff_1, diff_2, diff_3) < 10.0:
+                if max(diff_0, diff_1, diff_2, diff_3) < targ:
+                    # Once everything is within 10%, recalculate IK
                     break
+                sleep(.01)
+                # TODO: Add some sort of time check??
+                print(counter)
+                if counter > 20:
+                    print("No more movement posible!!")
+                    self.done = True
+                    return
+            print("movinh on")
+            self.move_complete = True
 
-
-
-            
 
     def step_towards_goal(self, start_vec, end_vec, distance):
         temp_x = end_vec[0] - start_vec[0]
@@ -310,10 +287,10 @@ class ik_manager:
         self.dynamixel_control = dynamixel_control.Dynamixel()
 
         if hand_type == "2v2":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 550, 1023], shift = 20) # Negative on left side was -25
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 546, 1023], shift = 0)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 482, 1023], shift = -20) # Positive on right side was 25
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 546, 1023], shift = 0)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 507, 1023], shift = 20) # Negative on left side was -25
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 483, 1023], shift = 0)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 518, 1023], shift = -20) # Positive on right side was 25
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 535, 1023], shift = 0)
         elif hand_type == "3v3":
             print("not implemented")
             pass
@@ -500,4 +477,4 @@ if __name__ == "__main__":
     """
     
     
-    manager.live_run()
+    manager.live_run("SE")
