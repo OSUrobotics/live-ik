@@ -435,18 +435,25 @@ class Dynamixel:
     def replay_pickle_data(self, file_location="Open_Loop_Data", file_name="angles_N.pkl", delay_between_steps: float = .01):
         
         try:    
+            # Get our pickle data
             pickle_length = self.load_pickle(file_location, file_name)
+
+
             #self.map_pickle(0)
             #self.send_goal()
             #input("Press Enter to continue to next step.")
+            self.flag = True
             for i in range(pickle_length):
                 self.map_pickle(i)
                 self.send_goal()
                 sleep(delay_between_steps)
+                self.bulk_read_pos()
                 #self.bulk_read_pos()
 
         except KeyboardInterrupt:
             self.end_program()
+
+    
 
     def go_to_initial_position(self, file_location="actual_trajectories_2v2", file_name="N_2v2_1.1_1.1_1.1_1.1.pkl"):
         #try: 
@@ -501,14 +508,14 @@ class Dynamixel:
 
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[0, 550, 1023], shift = 25) # Negative on left side was -25
-    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[0, 546, 1023], shift = 0)
-    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[0, 482, 1023], shift = -25) # Positive on right side was 25
-    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[0, 546, 1023], shift = 0)
+    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[77, 507, 763], shift = 20) # Negative on left side was -25
+    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[160, 483, 900], shift = 0)
+    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[270, 518, 938], shift = -20) # Positive on right side was 25
+    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[130, 535, 859], shift = 0)
     #4565, 545, 450, 553
 
     Dynamixel_control.setup_all()
-    Dynamixel_control.update_PID(85,25,45)
+    Dynamixel_control.update_PID(85,40,45)
     #Dynamixel_control.update_speed(400)
     #Dynamixel_control.test_write()
     #input("press enter to continue")

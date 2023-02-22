@@ -52,6 +52,8 @@ class Dxl:
         self.goal_position = calibration[1]
         self.current_torque = 0
 
+        self.read_position_m = None
+
         self.joint_angles_pickle = np.array([])
 
         # Add a value shift to account for applying force
