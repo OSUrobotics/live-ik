@@ -25,28 +25,33 @@ class ContourFind:
 
         # Sort contours largest to smallest by area
         sort_cont = sorted(contours, key=cv2.contourArea, reverse=True)
-
+        #print(sort_cont[0:2])
         # Grab the largest contour and apprximate it to the two endpoints
         c = sort_cont[0]
+        #print(f"C1: {c}")
         epsilon = 0.1*cv2.arcLength(c,True)
         approx_cont_1 = cv2.approxPolyDP(c,epsilon,True)
+        #print(f"C1: {c}, approx {approx_cont_1}")
         try:
             # Grab the second largest contour and apprximate it to the two endpoints
             c = sort_cont[1]
+            
             epsilon = 0.05*cv2.arcLength(c,True)
             approx_cont_2 = cv2.approxPolyDP(c,epsilon,True)
-
+            #print(f"C2: {c}, approx {approx_cont_2}")
             # Get in the format we want
             
             cont_1 = np.array([approx_cont_1[0][0], approx_cont_1[1][0]])
             cont_2 = np.array([approx_cont_2[0][0], approx_cont_2[1][0]])
 
             # Check that we are getting valid 2 point contours 
-            if self._check_lines(cont_1) and self._check_lines(cont_2):
-                pass
-            else: 
+            if not self._check_lines(cont_1) and not self._check_lines(cont_2):
                 # TODO: skip and continue instead of just breaking??
                 return None, None, None, None
+            
+            area1 = cv2.contourArea(sort_cont[0])
+            area2 = cv2.contourArea(sort_cont[1])
+            #print(f"Area 1: {area1}, Area 2: {area2}")
                 
             # Now order the contour points correcly
             #print("Cont_1")

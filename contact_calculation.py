@@ -138,9 +138,10 @@ class ContactPoint:
                 best_val = dist
                 best_object_point = obj_point
                 best_finger_point = fing_point
-            
+        
         if visualize and not self.first:
             # Plot the 4 sides of the object
+            plt.clf()
             for object_line in object:
                 plt.plot([object_line[0][0], object_line[1][0]], [object_line[0][1], object_line[1][1]], "g")
 
@@ -195,9 +196,9 @@ class ContactPoint:
         object_points = np.matmul(trans_matrix,np.matmul(rotation_matrix, np.matmul(scale_matrix, base_object_points)))
 
         # Convert into format used elsewhere (line segments)
-        output = [[[object_points[0][0], object_points[1][0]], [object_points[0][1], object_points[1][1]]], 
+        output = [#[[object_points[0][0], object_points[1][0]], [object_points[0][1], object_points[1][1]]], 
             [[object_points[0][1], object_points[1][1]], [object_points[0][2], object_points[1][2]]], 
-            [[object_points[0][2], object_points[1][2]], [object_points[0][3], object_points[1][3]]], 
+            #[[object_points[0][2], object_points[1][2]], [object_points[0][3], object_points[1][3]]], 
             [[object_points[0][3], object_points[1][3]], [object_points[0][0], object_points[1][0]]]]
 
         #plt.plot(object_points[0],object_points[1])
@@ -273,7 +274,6 @@ class ContactPoint:
                 output_finger_points[0][:] = finger_points[1][:]
                 output_finger_points[1][:] = finger_points[0][:]
 
-
         return output_finger_points
 
     def calculate_contact_delta(self, finger_array, dist_to_base, contact_point):
@@ -329,7 +329,7 @@ class ContactPoint:
         rotated = np.matmul(rot_mat, points)
 
         # Factor in actual distance from joint to bottom of red
-        rotated[1][0] = rotated[1][0] - (dist_to_base / 1000.00)
+        rotated[1][0] = rotated[1][0] - (dist_to_base)
 
         # Contact point in an array of x, y (x must be negative and y positive)
         contact_point_delta = np.zeros(2)
@@ -341,7 +341,7 @@ class ContactPoint:
         return contact_point_delta
 
 
-    def contact_point_calculation(self, object_pose = [0.0,0.0,0.0], finger_points = [[0.0,0.0],[1.0,0.0]], joint_angles = [0.0, 0.0], side = "L"):
+    def contact_point_calculation(self, object_pose = [0.0,0.0,0.0], finger_points = [[0.0,0.0],[1.0,0.0]], joint_angles = [0.0, 0.0], side = "L", dist_length=.072, sleeve_length=.0500):
         """ Uses all of the other finctions to find the contact point and return the contact point delta in the distal frame
 
         Args:
@@ -355,6 +355,15 @@ class ContactPoint:
         Returns:
             contact_delta (list): The [x, y] delta of the contact point in the frame of the distal link (x should be negative, y positive in all cases)
         """
+        if np.isclose(sleeve_length, .030):
+            spacing = .010
+        elif np.isclose(sleeve_length, .050):
+            spacing = .015
+        else: 
+            sys.exit("Error - incorrect sleeve length")
+
+        self.dist_joint_to_red = dist_length - sleeve_length + spacing
+        #print(self.dist_joint_to_red)
         self.side = side
         # Create the object segments
         object = self.create_object_segments(self.object_size, object_pose)

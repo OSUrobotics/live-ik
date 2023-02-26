@@ -422,20 +422,22 @@ class Aruco_Track:
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
             parameters=self.ARUCO_PARAMS["aruco_params"])
+        if len(ids[0])==1:
+            if ids[0][0]==5:
+                if corners:
+                    self.first_trial = False
+                    
+                    pose = self.get_square_pose(corners[0][0])
+                elif first_trial:
+                    pose = None
+                    print("No Aruco marker in the first frame!!")
+                else:
+                    pose = None
+                    print("No marker detected!!")
+                
+                return np.array(pose), corners, ids
+        return None, None, None
 
-        if corners:
-            self.first_trial = False
-            
-            pose = self.get_square_pose(corners[0][0])
-        elif first_trial:
-            pose = None
-            print("No Aruco marker in the first frame!!")
-        else:
-            pose = None
-            print("No marker detected!!")
-        
-        return np.array(pose), corners, ids
-   
    
     def live_tracking_analysis_updated(self, color_image, vtx):
         """Runs Aruco marker detection on one image. Updates the global position variables.
@@ -451,9 +453,11 @@ class Aruco_Track:
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
             parameters=self.ARUCO_PARAMS["aruco_params"])
+        print(corners)
+        #if len(ids[0]==1):
+         #   self.corners = corners
         self.corners = corners
         self.ids = ids
-
 
         if corners:
             self.first_trial = False

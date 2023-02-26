@@ -6,6 +6,7 @@ import pickle as pkl
 import numpy as np
 from math import pi
 from pathlib import Path
+import threading 
 
 # TODO: tune PID https://www.youtube.com/watch?v=msWlMyx8Nrw&ab_channel=ROBOTISOpenSourceTeam
 
@@ -17,6 +18,7 @@ class Dynamixel:
         self.BAUDRATE = 57600
 
         self.portHandler = PortHandler(self.DEVICENAME)
+        self.event = threading.Event()
 
         # Create flag for first bulk read
         self.first_bulk_read = True
@@ -373,7 +375,7 @@ class Dynamixel:
 
         path_to = os.path.abspath(os.path.dirname(__file__))
         file_path = os.path.join(path_to, file_location, file_name)
-    
+        print(f"here: {file_path}")
         with open(file_path, 'rb') as f:
             self.data = pkl.load(f)
 
@@ -428,6 +430,7 @@ class Dynamixel:
 
         # Set the positions in terms of actual calibrated motor positions
         for id in self.dxls.keys():
+            #print(self.data[i])
             self.dxls[id].goal_position = self.dxls[id].center_pos + self.convert_rad_to_pos(self.data[i]["joint_" + str(id+1)])
             #self.dxls[id].joint_angles_pickle[i]
 
@@ -444,6 +447,8 @@ class Dynamixel:
             #input("Press Enter to continue to next step.")
             self.flag = True
             for i in range(pickle_length):
+                if self.event.is_set():
+                    break
                 self.map_pickle(i)
                 self.send_goal()
                 sleep(delay_between_steps)
@@ -452,6 +457,7 @@ class Dynamixel:
 
         except KeyboardInterrupt:
             self.end_program()
+        self.end_program()
 
     
 
@@ -470,9 +476,15 @@ class Dynamixel:
     def go_to_start(self):
         #try: 
         for id in self.dxls.keys():
-            self.update_goal(id, self.dxls[id].center_pos)
+            if id == 0:
+                self.update_goal(id, self.dxls[id].center_pos-150)
+            elif id == 2:
+                self.update_goal(id, self.dxls[id].center_pos)
+            else:
+                self.update_goal(id, self.dxls[id].center_pos)
         
         self.send_goal()
+
         #except:
             #print("ahhh")
             #self.end_program()
