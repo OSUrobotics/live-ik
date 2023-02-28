@@ -45,7 +45,7 @@ class ik_manager:
         self.f2_direction_dict = {
             "N": np.array([0.0, .15]), # done
             "NE": np.array([0.15, .15]),
-            "E": np.array([0.15, 0.0]),
+            "E": np.array([0.15, 0.00]),
             "SE": np.array([0.15, -.15]),
             "S": np.array([0.0, -.15]),
             "SW": np.array([-0.15, -.15]),
@@ -126,14 +126,14 @@ class ik_manager:
         # INVERSE KINEMATICS
         if hand_name == "2v2":
             
-            testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [.029, 0, 0]},
-                "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .072, 0], [0, .072, 0]], "offset": [-.029, 0, 0]}}
+            testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .108, 0], [0, .108, 0]], "offset": [.047625, 0, 0]},
+                "finger2": {"name": "finger1", "num_links": 2, "link_lengths": [[0, .108, 0], [0, .108, 0]], "offset": [-.047625, 0, 0]}}
         elif hand_name == "2v3":
             testhand = {"finger1": {"name": "finger0", "num_links": 2, "link_lengths": [[0, .054, 0], [0, .162, 0]], "offset": [.04, 0, 0]},
                 "finger2": {"name": "finger1", "num_links": 3, "link_lengths": [[0, .054, 0], [0, .0756, 0], [0, .0864, 0]], "offset": [-.04, 0, 0]}}
         elif hand_name == "3v3":
             testhand = {"finger1": {"name": "finger0", "num_links": 3, "link_lengths": [[0, .108, 0], [0, .054, 0], [0, .054, 0]], "offset": [.047625, 0, 0]},
-                "finger2": {"name": "finger1", "num_links": 3, "link_lengths": [[0, .0872, 0], [0, .06479, 0], [0, .054, 0]], "offset": [-.047625, 0, 0]}}
+                "finger2": {"name": "finger1", "num_links": 3, "link_lengths": [[0, .054, 0], [0, .0972, 0], [0, .06479, 0]], "offset": [-.047625, 0, 0]}}
         ik_left = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger2"])
         ik_right = hand.liveik.JacobianIKLIVE(hand_id=1, finger_info=testhand["finger1"])
 
@@ -194,7 +194,7 @@ class ik_manager:
                 object_pose = self._pix_to_m(current_pose[0:2], vtx)
                 if first_time:
                     # If this is the first frame we are capturing, save this as our intial position to use for relative calculations
-                    self.dynamixel_control.bulk_read_pos()  # Read the current motor positions
+                    self.dynamixel_control.bulk_read_pos()   # Read the current motor positions
                     first_time = False
                     self.initial_pose = [object_pose[0], object_pose[1], current_pose[2]]
                     continue
@@ -207,7 +207,8 @@ class ik_manager:
                     print('Bad contour position!')
                     continue
 
-                # Get the current motor positions             
+                # Get the current motor positions 
+                #self.dynamixel_control.bulk_read_pos()            
                 m0 = self.dynamixel_control.dxls[0].read_position_m # Get the position of motor 0 - right prox
                 m1 = self.dynamixel_control.dxls[1].read_position_m # Get the position of motor 1 
                 m2 = self.dynamixel_control.dxls[2].read_position_m # Get the position of motor 2 
@@ -227,6 +228,8 @@ class ik_manager:
                     m5 = self.dynamixel_control.dxls[5].read_position_m # Get the position of motor 5 - left distal
                     joint_right = [m0, m1, m2]
                     joint_left = [m3, m4, m5]
+                #print(joint_left)
+                #print(joint_right)
 
                 
 
@@ -243,7 +246,7 @@ class ik_manager:
                 save_list.append(data_dict)
                 #print("looping")
 
-                show_image = True
+                show_image = False
                 if show_image:
                     # For plotting, calculate the pixels per mm
                     test_obj = np.array([current_pose[0]+10, current_pose[1]])
@@ -282,10 +285,10 @@ class ik_manager:
                     m1 = self.dynamixel_control.dxls[1].read_position_m # Get the position of motor 1 
                     m2 = self.dynamixel_control.dxls[2].read_position_m # Get the position of motor 2 
                     m3 = self.dynamixel_control.dxls[3].read_position_m # Get the position of motor 3
-                    m4 = self.dynamixel_control.dxls[4].read_position_m # Get the position of motor 4 - left intermediate
-                    m5 = self.dynamixel_control.dxls[5].read_position_m # Get the position of motor 5 - left distal
-                    joint_right = deepcopy([m0, m1, m2])
-                    joint_left = deepcopy([m3, m4, m5])
+                    #m4 = self.dynamixel_control.dxls[4].read_position_m # Get the position of motor 4 - left intermediate
+                    #m5 = self.dynamixel_control.dxls[5].read_position_m # Get the position of motor 5 - left distal
+                    joint_right = deepcopy([m0, m1])
+                    joint_left = deepcopy([m2, m3])
 
                     ik_left.update_angles(deepcopy(joint_left))
                     ik_right.update_angles(deepcopy(joint_right))
@@ -293,7 +296,7 @@ class ik_manager:
                     print("starting thread")
                     self.move_complete = False
                     #self.block = True
-                    self.move_thread(actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5)
+                    self.move_thread(hand_name, actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5)
             # Start pickle file
             file = self.set_up_pickle(direction, hand_name, ratios, "live", trial)
             pkl.dump(save_list,file)
@@ -311,14 +314,14 @@ class ik_manager:
             print("File saved.")
             
     
-    def move_thread(self, actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5):
-        dy = threading.Thread(target=self.dyn_move, args=(actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5, ), daemon=True)
+    def move_thread(self, hand_name, actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5):
+        dy = threading.Thread(target=self.dyn_move, args=(hand_name, actual_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5, ), daemon=True)
         dy.start()
 
-    def dyn_move(self, current_obj_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5):
-        limit = .6
+    def dyn_move(self, hand, current_obj_pose, contact_point_l, direction, contact_point_r, ik_left, ik_right, contact_delta_l, contact_delta_r, m0, m1, m2, m3, m4, m5):
+        limit = .5
         # Try lower step values, increase them as neccessary
-        step = .015
+        step = .02
         counter = 0
         while not self.move_complete:
             if self.event.is_set():
@@ -379,26 +382,42 @@ class ik_manager:
             #print(joint_a)
 
             """
-            #print(f"Contact left: {shifted_by_palm_l}, Contact right: {shifted_by_palm_r}")
-            #print(f"Target left: {l_point}, Target Right: {r_point}")
-            #print(f"L: {contact_delta_l}, R: {contact_delta_r}")
-            print(f"m0: {m0}, new_m0: {new_angles_r[0]}::: m1: {m1}, new_m1: {new_angles_r[1]}::: m2: {m2}, new_m2: {new_angles_r[2]}::: m3: {m3}, new_m3: {new_angles_l[0]}::: m4: {m4}, new_m4: {new_angles_l[1]}::: m5: {m5}, new_m5: {new_angles_l[2]}")
+            print(f"Contact left: {shifted_by_palm_l}, Contact right: {shifted_by_palm_r}")
+            print(f"Target left: {l_point}, Target Right: {r_point}")
+            print(f"L: {contact_delta_l}, R: {contact_delta_r}")
+            print(f"m0: {m0}, new_m0: {new_angles_r[0]}::: m1: {m1}, new_m1: {new_angles_r[1]}::: m2: {m2}, new_m2: {new_angles_l[0]}::: m3: {m3}, new_m3: {new_angles_l[1]}")
 
             limit = .6
-            if np.abs(new_angles_r[0]-m0) > limit or np.abs(new_angles_r[1]-m1) > limit or np.abs(new_angles_r[2]-m2) > limit or np.abs(new_angles_l[0]-m3) > limit or np.abs(new_angles_l[1]-m4) > limit or np.abs(new_angles_l[2]-m5) > limit:
-                print("Bad value")
-                counter += 1
-                if step > .04:
-                    self.move_complete = True
-                    break
-                else: 
+            if hand == "3v3":
+                if np.abs(new_angles_r[0]-m0) > limit or np.abs(new_angles_r[1]-m1) > limit or np.abs(new_angles_r[2]-m2) > limit or np.abs(new_angles_l[0]-m3) > limit or np.abs(new_angles_l[1]-m4) > limit or np.abs(new_angles_l[2]-m5) > limit:
+                    print("Bad value")
+                    counter += 1
+                    if step < .001:
+                        self.move_complete = True
+                        break
+                    else: 
 
-                    step += .005
-                if counter > 8:
-                    self.move_complete = True
-                    break
-                #self.move_complete = True
-                continue
+                        step -= .005
+                    if counter > 8:
+                        self.move_complete = True
+                        break
+                    #self.move_complete = True
+                    continue
+            elif hand == "2v2":
+                if np.abs(new_angles_r[0]-m0) > limit or np.abs(new_angles_r[1]-m1) > limit or np.abs(new_angles_l[0]-m2) > limit or np.abs(new_angles_l[1]-m3) > limit:
+                    print("Bad value")
+                    counter += 1
+                    if step < .001:
+                        self.move_complete = True
+                        break
+                    else: 
+
+                        step -= .005
+                    if counter > 8:
+                        self.move_complete = True
+                        break
+                    #self.move_complete = True
+                    continue
             
             # HERE WE START MOVEMENT thread
             # Update the goal
@@ -468,16 +487,16 @@ class ik_manager:
             goal1_array = np.linspace(m1, goal1, num)
             goal2_array = np.linspace(m2, goal2, num)
             goal3_array = np.linspace(m3, goal3, num)
-            goal4_array = np.linspace(m4, goal4, num)
-            goal5_array = np.linspace(m5, goal5, num)
+            #goal4_array = np.linspace(m4, goal4, num)
+            #goal5_array = np.linspace(m5, goal5, num)
 
             for i in range(num):
                 self.dynamixel_control.update_goal(0, self.dynamixel_control.dxls[0].center_pos+self.dynamixel_control.convert_rad_to_pos(goal0_array[i]))
                 self.dynamixel_control.update_goal(1, self.dynamixel_control.dxls[1].center_pos+self.dynamixel_control.convert_rad_to_pos(goal1_array[i]))
                 self.dynamixel_control.update_goal(2, self.dynamixel_control.dxls[2].center_pos+self.dynamixel_control.convert_rad_to_pos(goal2_array[i]))
                 self.dynamixel_control.update_goal(3, self.dynamixel_control.dxls[3].center_pos+self.dynamixel_control.convert_rad_to_pos(goal3_array[i]))
-                self.dynamixel_control.update_goal(4, self.dynamixel_control.dxls[4].center_pos+self.dynamixel_control.convert_rad_to_pos(goal4_array[i]))
-                self.dynamixel_control.update_goal(5, self.dynamixel_control.dxls[5].center_pos+self.dynamixel_control.convert_rad_to_pos(goal5_array[i]))
+                #self.dynamixel_control.update_goal(4, self.dynamixel_control.dxls[4].center_pos+self.dynamixel_control.convert_rad_to_pos(goal4_array[i]))
+                #self.dynamixel_control.update_goal(5, self.dynamixel_control.dxls[5].center_pos+self.dynamixel_control.convert_rad_to_pos(goal5_array[i]))
                 self.dynamixel_control.send_goal()
                 sleep(.005)
             #sleep(.35)
@@ -540,23 +559,23 @@ class ik_manager:
         self.dynamixel_control = dynamixel_control.Dynamixel()
 
         if hand_type == "2v2":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[77, 507, 763], shift = 18)   # Right proximal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[160, 483, 900], shift = 0)   # Right distal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[270, 518, 938], shift = -20) # Left proximal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[130, 535, 859], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[56, 428, 699], shift = 30)   # Right proximal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[115, 444, 866], shift = 0)   # Right distal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[206, 477, 802], shift = -15) # Left proximal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[18, 439, 773], shift = 0)   # Left distal (finger 2)
         elif hand_type == "2v3":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[214, 500, 764], shift = 23)#18)   # Right proximal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[214, 500, 764], shift = 0)#18)   # Right proximal (finger 1)
             self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[168, 479, 912], shift = 0)   # Right distal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[306, 560, 840], shift = -18)#-20) # Left proximal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[306, 560, 840], shift = 0)#-20) # Left proximal (finger 2)
             self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[120, 437, 771], shift = 0)   # Left intermediate (finger 2)
             self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[148, 585, 913], shift = 0)   # Left distal (finger 2)
         elif hand_type == "3v3":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[287, 563, 775], shift = 22)#18)   # Right proximal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[276, 513, 836], shift = 0)   # Right distal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[69, 412, 856], shift = 0) # Left proximal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[212, 492, 842], shift = -15)#-18   # Left intermediate (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[117, 445, 689], shift = 0)   # Left distal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=5, calibration=[127, 470, 833], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[137, 496, 775], shift = 21)#was 24#18)   # Right proximal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[377, 569, 910], shift = 0)   # Right distal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[138, 491, 857], shift = 0) # Left proximal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[198, 491, 785], shift = -24)#-21   # Left intermediate (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[120, 438, 820], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=5, calibration=[124, 548, 880], shift = 0)   # Left distal (finger 2)
         else:
             #hand_type == "3v3":
             print("hand type not implemented")
@@ -780,13 +799,13 @@ if __name__ == "__main__":
     """
     
     # Uncomment this for live
-    """
-    manager.left_dist_length = .08184
+    #"""
+    manager.left_dist_length = .108
     manager.left_sleeve_length = .050
-    manager.right_dist_length = .0568
-    manager.right_sleeve_length = .030
+    manager.right_dist_length = .108
+    manager.right_sleeve_length = .050
 
-    manager.live_run(direction="N", hand_name="3v3", ratios="50.25.25_30.30.40_0.9.1_63", trial="1")
-    """
-    manager.dyn_replay(direction="NW", hand_name="3v3", ratios="50.25.25_30.30.40_0.9.1_63")
+    manager.live_run(direction="NW", hand_name="2v2", ratios="50.50_50.50_1.1_63", trial="3")
+    #"""
+    #manager.dyn_replay(direction="NW", hand_name="2v2", ratios="50.50_50.50_1.1_63")
     #manager.test_contour_visualizer()
