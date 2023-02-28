@@ -477,7 +477,7 @@ class Dynamixel:
         #try: 
         for id in self.dxls.keys():
             if id == 0:
-                self.update_goal(id, self.dxls[id].center_pos-150)
+                self.update_goal(id, self.dxls[id].center_pos)
             elif id == 2:
                 self.update_goal(id, self.dxls[id].center_pos)
             else:
