@@ -559,10 +559,10 @@ class ik_manager:
         self.dynamixel_control = dynamixel_control.Dynamixel()
 
         if hand_type == "2v2":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[56, 428, 699], shift = 30)   # Right proximal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[115, 444, 866], shift = 0)   # Right distal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[206, 477, 802], shift = -15) # Left proximal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[18, 439, 773], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[56, 428, 699], shift = 20)   # Right proximal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[115, 444, 866], shift = 10)   # Right distal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[206, 477, 802], shift = -5) # Left proximal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[18, 439, 773], shift = -10)   # Left distal (finger 2)
         elif hand_type == "2v3":
             self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[214, 500, 764], shift = 0)#18)   # Right proximal (finger 1)
             self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[168, 479, 912], shift = 0)   # Right distal (finger 1)
@@ -570,12 +570,12 @@ class ik_manager:
             self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[120, 437, 771], shift = 0)   # Left intermediate (finger 2)
             self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[148, 585, 913], shift = 0)   # Left distal (finger 2)
         elif hand_type == "3v3":
-            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[137, 496, 775], shift = 21)#was 24#18)   # Right proximal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[377, 569, 910], shift = 0)   # Right distal (finger 1)
-            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[138, 491, 857], shift = 0) # Left proximal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[198, 491, 785], shift = -24)#-21   # Left intermediate (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[120, 438, 820], shift = 0)   # Left distal (finger 2)
-            self.dynamixel_control.add_dynamixel(ID_number=5, calibration=[124, 548, 880], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[137, 431, 775], shift = 10)#was 24#18)   # Right proximal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=1, calibration=[377, 573, 910], shift = 0)   # Right distal (finger 1)
+            self.dynamixel_control.add_dynamixel(ID_number=2, calibration=[138, 481, 857], shift = 20) # Left proximal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=3, calibration=[198, 511, 785], shift = -10)#-21   # Left intermediate (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=4, calibration=[120, 454, 820], shift = 0)   # Left distal (finger 2)
+            self.dynamixel_control.add_dynamixel(ID_number=5, calibration=[124, 529, 880], shift = 15)   # Left distal (finger 2)
         else:
             #hand_type == "3v3":
             print("hand type not implemented")
@@ -762,30 +762,123 @@ class ik_manager:
             none        
         """
         # Ok, so we start by setting up the classes
-        at = aruco.Aruco_Track(self.aruco_params)       # ARUCO
-        contour = ContourFind()                         # CONTOUR
-        
-        # Start RealSense
-        at.start_realsense()
+        # Ok, so we start by setting up the classes
+        ## ARUCO TRACKING
+        at = aruco.Aruco_Track(self.aruco_params)
+        ## CONTOUR FINDING
+        contour = ContourFind()
+        ## CONTACT CALCULATIONS
+        contact = ContactPoint(object_size=58.5)
 
+        
+           
+
+        # Update values
+        self.palm_shift = .16005
+        ## DYNAMIXEL setup
+
+        # Start RealSense
+        at.start_realsense()    
+        
+        #os.path.dirname(__file__))
+        #file_path = os.path.join(path_to, file_location, file_name)
+    
+        #with open(file_path, 'rb') as f:
+        #    self.data = pkl.load(f)
+        save_list = []
+
+        first_time = True
+        frame_counter = 0 
         while True:
+            if self.done:
+                break
+
             # Get the color image and point data
             color_image, vtx = at.get_frame()
 
+            if color_image is None or vtx is None:
+                # Check that we actually recived an image and points
+                continue
+
+            # Wait for the first predetermined number of frames before performing calculations
+            if frame_counter < 40:
+                frame_counter+=1
+                continue
+
             # Get our current object pose in pixel coordinates
             current_pose, corners, ids = at.object_pose(color_image, vtx, True)
-            print(current_pose)
+            print(ids)
             if current_pose is None:
+                # If unable to determine a pose, continue
                 continue
-            
         
             # Get the contours back in pixel coordinates
-            _, _, orig_c1, orig_c2 = contour.find_countours(color_image)
-            if orig_c1 is not None and orig_c2 is not None:
-                contour_image = cv2.drawContours(color_image, [orig_c1, orig_c2], -1, (0, 255, 0), 3)
+            f_l_contour, f_r_contour, orig_c_left, orig_c_right = contour.find_countours(color_image)
+            if f_l_contour is None:
+                continue
+            
+            # Convert from from pixel coordinates to m w/ depth data
+            object_pose = self._pix_to_m(current_pose[0:2], vtx)
+            if first_time:
+                first_time = False
+                self.initial_pose = [object_pose[0], object_pose[1], current_pose[2]]
+                continue
+            
+            finger_l_contour_m = self._pix_to_m(f_l_contour, vtx)
+            finger_r_contour_m = self._pix_to_m(f_r_contour, vtx)
+            zero_array = np.zeros(2)
+            if np.all(np.isclose(finger_l_contour_m[0], zero_array)) or np.all(np.isclose(finger_l_contour_m[1], zero_array)) or np.all(np.isclose(finger_r_contour_m[0], zero_array)) or np.all(np.isclose(finger_r_contour_m[1], zero_array)):
+                # We got a bad contour postion
+                print('Bad contour position!')
+                continue
 
-            cv2.imshow("hi", contour_image)
-            cv2.waitKey(5)
+            
+
+
+            # Take the contours and object pose and calculate contact points
+            contact_point_l, contact_delta_l = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_l_contour_m, [0,0], "L", dist_length=self.left_dist_length, sleeve_length=self.left_sleeve_length)
+            contact_point_r, contact_delta_r = contact.contact_point_calculation([object_pose[0], object_pose[1], current_pose[2]], finger_r_contour_m, [0,0], "R", dist_length=self.right_dist_length, sleeve_length=self.right_sleeve_length)
+
+            #contact_delta_l[1] = min(contact_delta_l[1], .072)
+            #contact_delta_r[1] = min(contact_delta_r[1], .072)
+
+            actual_pose = np.subtract([object_pose[0], object_pose[1], current_pose[2]], self.initial_pose)
+            #print("looping")
+
+            show_image = True
+            if show_image:
+                # For plotting, calculate the pixels per mm
+                test_obj = np.array([current_pose[0]+10, current_pose[1]])
+                test_obj_mm = self._pix_to_m(test_obj, vtx)
+                diff_x = test_obj_mm[0] - object_pose[0] # Distance per 10 pixels in x
+
+                test_obj = np.array([current_pose[0], current_pose[1]-10])
+                test_obj_mm = self._pix_to_m(test_obj, vtx)
+                diff_y = test_obj_mm[1] - object_pose[1] # Distance per 10 pixels in y
+
+
+                # Check that we have valid pixels per mm
+                if np.isclose(diff_x, 0.0) or np.isclose(diff_y, 0.0):
+                    continue
+                # Now take a find the right contact point's number of pixels 
+                x_r = int(10*(object_pose[0]-contact_point_r[0])/diff_x) 
+                y_r = int(10*(object_pose[1]-contact_point_r[1])/diff_y)
+
+                # Now take and find the left contact point's number of pixels 
+                x_l = int(10*(object_pose[0]-contact_point_l[0])/diff_x) 
+                y_l = int(10*(object_pose[1]-contact_point_l[1])/diff_y)
+                # Draw contours        
+                contour_image = cv2.drawContours(color_image, [orig_c_left, orig_c_right], -1, (0, 255, 255), 3)
+                #cv2.aruco.drawDetectedMarkers(color_image, corners)
+                
+                # Draw a red circle with zero radius and -1 for filled circle
+                image2 = cv2.circle(color_image, (int(current_pose[0]-x_l),int(current_pose[1]+y_l)), radius=5, color=(0, 0, 255), thickness=-1)
+                image3 = cv2.circle(color_image, (int(current_pose[0]-x_r),int(current_pose[1]+y_r)), radius=5, color=(0, 0, 255), thickness=-1)
+
+                cv2.imshow("hi", image3)
+                cv2.imwrite("points.png", image3)
+                cv2.waitKey(0)
+
 
 
 if __name__ == "__main__":
@@ -795,17 +888,22 @@ if __name__ == "__main__":
     pickle_files = ["angles_N.pkl", "angles_NE.pkl", "angles_E.pkl", "angles_SE.pkl", "angles_S.pkl", "angles_SW.pkl", "angles_W.pkl", "angles_NW.pkl"]
     for pkl in pickle_files:
         manager.linear_run(pkl)
-    #manager.contour_visualizer()
+    
     """
+    manager.left_dist_length = .0647
+    manager.left_sleeve_length = .03
+    manager.right_dist_length = .054
+    manager.right_sleeve_length = .030
+    manager.test_contour_visualizer()
     
     # Uncomment this for live
-    #"""
+    """
     manager.left_dist_length = .108
     manager.left_sleeve_length = .050
     manager.right_dist_length = .108
     manager.right_sleeve_length = .050
 
     manager.live_run(direction="NW", hand_name="2v2", ratios="50.50_50.50_1.1_63", trial="3")
-    #"""
-    #manager.dyn_replay(direction="NW", hand_name="2v2", ratios="50.50_50.50_1.1_63")
+    """
+    #manager.dyn_replay(direction="N", hand_name="3v3", ratios="50.25.25_25.45.30_1.1_63")
     #manager.test_contour_visualizer()

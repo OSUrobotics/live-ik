@@ -446,13 +446,18 @@ class Dynamixel:
             #self.send_goal()
             #input("Press Enter to continue to next step.")
             self.flag = True
+            self.skipp = False
             for i in range(pickle_length):
-                if self.event.is_set():
-                    break
+                if self.skipp == True:
+                    self.skipp = False
+                    continue
+                #if self.event.is_set():
+                #    break
                 self.map_pickle(i)
                 self.send_goal()
-                sleep(delay_between_steps)
-                self.bulk_read_pos()
+                #sleep(delay_between_steps)
+                #self.bulk_read_pos()
+                self.skipp = True
                 #self.bulk_read_pos()
 
         except KeyboardInterrupt:
@@ -520,10 +525,12 @@ class Dynamixel:
 
 if __name__ == "__main__":
     Dynamixel_control = Dynamixel()
-    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[77, 507, 763], shift = 20) # Negative on left side was -25
-    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[160, 483, 900], shift = 0)
-    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[270, 518, 938], shift = -20) # Positive on right side was 25
-    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[130, 535, 859], shift = 0)
+    Dynamixel_control.add_dynamixel(ID_number=0, calibration=[0,429,1023], shift = 10) # Negative on left side was -25
+    Dynamixel_control.add_dynamixel(ID_number=1, calibration=[0,575,1023], shift = 25)
+    Dynamixel_control.add_dynamixel(ID_number=2, calibration=[0,481,1023], shift = 20) # Positive on right side was 25
+    Dynamixel_control.add_dynamixel(ID_number=3, calibration=[0,604,1023], shift = -10)
+    Dynamixel_control.add_dynamixel(ID_number=4, calibration=[0,309,1023], shift = 0) # Positive on right side was 25
+    Dynamixel_control.add_dynamixel(ID_number=5, calibration=[0,497,1023], shift = -20)
     #4565, 545, 450, 553
 
     Dynamixel_control.setup_all()
@@ -534,12 +541,12 @@ if __name__ == "__main__":
     print("PID done")
     Dynamixel_control.update_speed(100)
     #Dynamixel_control.go_to_start()
-    sleep(2)
+    sleep(1)
     print("Speed done")
-    Dynamixel_control.go_to_initial_position(file_location = "actual_trajectories_2v2",file_name="SW_2v2_1.1_1.1_1.1_1.1.pkl")
-    Dynamixel_control.update_speed(500)
+    Dynamixel_control.go_to_initial_position(file_location = "Open_Loop_Data/3v3_50.25.25_25.45.30_1.1_63",file_name="SW_3v3_50.25.25_25.45.30_1.1_63.pkl")
+    Dynamixel_control.update_speed(1000)
     print("Speed done")
     input("Press enter")
-    Dynamixel_control.replay_pickle_data(file_location = "actual_trajectories_2v2",file_name="SE_2v2_1.1_1.1_1.1_1.1.pkl", delay_between_steps = 0)
+    Dynamixel_control.replay_pickle_data(file_location = "Open_Loop_Data/3v3_50.25.25_25.45.30_1.1_63",file_name="N_3v3_50.25.25_25.45.30_1.1_63.pkl", delay_between_steps = 0)
 
     
