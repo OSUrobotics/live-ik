@@ -7,8 +7,8 @@ class ContourFind:
     def __init__(self) -> None:
 
         # Arrays for masking the image (BGR format)
-        self.lowcolor = (0,0,90)
-        self.highcolor = (70,70,200)
+        self.lowcolor = (20,20,100)
+        self.highcolor = (60,60,200)
     
         pass
 
