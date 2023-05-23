@@ -271,7 +271,8 @@ class DDPGfD_RW():
                         state.extend(state_container['previous_state'][i]['f1_base'][0:2])
                         state.extend(state_container['previous_state'][i]['f2_base'][0:2])
                     elif key == 'ja':
-                        state.extend([item for item in state_container['previous_state'][i]['two_finger_gripper']['joint_angles'].values()])
+                        temp = state_container['previous_state'][i]['two_finger_gripper']['joint_angles']
+                        state.extend([temp['r_prox_pin'],temp['r_distal_pin'],temp['l_prox_pin'],temp['l_distal_pin']])
                     elif key == 'gp':
                         state.extend(state_container['previous_state'][i]['goal_pose']['goal_pose'])
                     else:
@@ -287,7 +288,8 @@ class DDPGfD_RW():
                 state.extend(state_container['current_state']['f1_base'][0:2])
                 state.extend(state_container['current_state']['f2_base'][0:2])
             elif key == 'ja':
-                state.extend([item for item in state_container['current_state']['two_finger_gripper']['joint_angles'].values()])
+                temp = state_container['current_state']['two_finger_gripper']['joint_angles']
+                state.extend([temp['r_prox_pin'],temp['r_distal_pin'],temp['l_prox_pin'],temp['l_distal_pin']])
                 # print(state)
             elif key == 'gp':
                 state.extend(state_container['current_state']['goal_pose']['goal_pose'])

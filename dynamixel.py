@@ -6,30 +6,44 @@ class Dxl:
 
     def __init__(self, dxl_dict): 
         calibration = dxl_dict["calibration"]
+        self.type = dxl_dict["type"] 
 
         if dxl_dict["type"] == "XL-320":
-            # Table values that corespond to the Dynamixel XL-320
-            self.ADDR_P                      = 29
-            self.ADDR_D                      = 27
-            self.ADDR_I                      = 28
-            self.LEN_PID                     = 1
-            self.ADDR_TORQUE_ENABLE          = 24
-            self.ADDR_LED_RED                = 65
-            self.LEN_LED_RED                 = 1         # Data Byte Length
-            self.ADDR_GOAL_POSITION          = 30
-            self.LEN_GOAL_POSITION           = 4         # Data Byte Length
-            self.ADDR_PRESENT_POSITION       = 37
-            self.LEN_PRESENT_POSITION        = 2        # Data Byte Length
-            self.DXL_MINIMUM_POSITION_VALUE  = 0         # Refer to the Minimum Position Limit of product eManual
-            self.DXL_MAXIMUM_POSITION_VALUE  = 4095      # Refer to the Maximum Position Limit of product eManual
-            self.BAUDRATE                    = 57600
+            self.dxl_params = {"ADDR_P_position": 29,
+                               "ADDR_I_position": 28,
+                               "ADDR_D_position": 27,
+                               "LEN_PID_position": 1,
 
-            self.CURRENT_TORQUE_INDEX        = 41       # No units - from range 0 to 1023. Technically I have it capped at 950 now tho
-            self.LEN_CURRENT_TORQUE_INDEX    = 1
+                               "ADDR_torque_enable": 24,
+                               "LEN_torque_enable": 1,
 
-            # Protocol Version 2.0 for the Dynamixel XL-320
-            self.PROTOCOL_VERSION            = 2.0
+                               "ADDR_goal_position": 30,
+                               "LEN_goal_position": 4,
+
+                               "ADDR_present_position": 37,
+                               "LEN_present_position": 2
+            }
+        elif dxl_dict["type"] == "XL-330":
+            self.dxl_params = {"ADDR_P_position": 84,
+                                "ADDR_I_position": 80,
+                                "ADDR_D_position": 82,
+                                "LEN_PID_position": 2,
+
+                                "ADDR_torque_enable": 64,
+                                "LEN_torque_enable": 1,
+
+                                "ADDR_velocity_cap": 112,
+                                "LEN_velocity_cap": 4,
+
+                                "ADDR_goal_position": 116,
+                                "LEN_goal_position": 4,
+
+                                "ADDR_present_position": 132,
+                                "LEN_present_position": 4
+            }
+            print("This worked")
         else:
+            print(dxl_dict["type"])
             ex("Dynamixel type not implemented")
 
         

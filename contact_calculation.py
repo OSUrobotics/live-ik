@@ -355,6 +355,8 @@ class ContactPoint:
         Returns:
             contact_delta (list): The [x, y] delta of the contact point in the frame of the distal link (x should be negative, y positive in all cases)
         """
+        #if side == "L":
+        #    print(f"Finger points: {finger_points}")
         if np.isclose(sleeve_length, .030):
             spacing = .010
         elif np.isclose(sleeve_length, .050):
@@ -379,6 +381,56 @@ class ContactPoint:
         contact_delta = self.calculate_contact_delta(finger_points, self.dist_joint_to_red, contact_point)
         self.first = False
         return contact_point, contact_delta
+
+    def project_line(self, line, spacing, dist_length):
+
+        # Points should already be in order maybe??
+
+        # Create vector between the two points
+        vector = line[1,:] - line[0,:]
+        unit_vector = vector / np.linalg.norm(vector)
+
+        # Distance to top is point + length of spacing
+        top_point = line[1,:] + spacing*unit_vector
+
+        # Distance to bottom point is top point - dist length
+        bottom_point = top_point - dist_length*unit_vector
+
+        return bottom_point, top_point
+
+
+
+    def joint_point_calculation(self, object_pose = [0.0,0.0,0.0], finger_points = [[0.0,0.0],[1.0,0.0]], joint_angles = [0.0, 0.0], side = "L", dist_length=.072, sleeve_length=.0500):
+        """ Uses all of the other finctions to find the contact point and return the contact point delta in the distal frame
+
+        Args:
+            object_pose (list): The object pose in meters and radians [x, y, theta]
+                (default is [0.0, 0.0, 0.0])
+            finger_points (list): The two points defining the top/bottom of the red line
+                (default is [[0.0, 0.0], [0.0, 0.0]])
+            joint_angles (list): All of the joint angles for that link in radians (i.e. [prox_angle, int_angle, dist_angle]). Can accept any length (for 1-infinite number of links)
+                (default [0.0, 0.0])
+
+        Returns:
+            contact_delta (list): The [x, y] delta of the contact point in the frame of the distal link (x should be negative, y positive in all cases)
+        """
+        
+        if np.isclose(sleeve_length, .030):
+            spacing = .010
+        elif np.isclose(sleeve_length, .050):
+            spacing = .015
+        else: 
+            sys.exit("Error - incorrect sleeve length")
+
+                # Reorder finger points
+        finger_points = self.finger_point_ordering(finger_points, joint_angles)
+
+        # Calculate the bottom and top points
+        bottom, top = self.project_line(finger_points, spacing, dist_length)
+        
+        #if side == "R":
+            #print(f"Bottom {bottom}, Top: {top}")
+        return bottom, top
 
 
 

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import threading
 import logging
-import dynamixel_control
+import dynamixel_control_old
 from time import time, sleep
 import sys
 from contact_calculation import ContactPoint
@@ -479,7 +479,7 @@ class ik_manager:
 
 
     def dyn_setup(self, hand_type = "2v3"):
-        self.dynamixel_control = dynamixel_control.Dynamixel()
+        self.dynamixel_control = dynamixel_control_old.Dynamixel()
 
         if hand_type == "2v2":
             self.dynamixel_control.add_dynamixel(ID_number=0, calibration=[77, 507, 763], shift = 18)   # Right proximal (finger 1)

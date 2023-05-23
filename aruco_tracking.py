@@ -423,7 +423,7 @@ class Aruco_Track:
         (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
             parameters=self.ARUCO_PARAMS["aruco_params"])
         if len(ids[0])==1:
-            if ids[0][0]==5:
+            if ids[0][0]==1: #ID NUM HERE
                 if corners:
                     self.first_trial = False
                     

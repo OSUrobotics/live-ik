@@ -15,7 +15,7 @@ class State_RW:
          'f2_pos': [],
          'f1_base': [],
          'f2_base': []},
-         'previous_state': [{'two_finger_gripper': {'pose': [[], []],
+         'previous_state': [[{'two_finger_gripper': {'pose': [[], []],
            'joint_angles': {'l_prox_pin': 0.75,
             'l_distal_pin': -1.4,
             'r_prox_pin': -0.75,
@@ -26,8 +26,9 @@ class State_RW:
           'f1_pos': [],
           'f2_pos': [],
           'f1_base': [],
-          'f2_base': []}*5]}
+          'f2_base': []}]*5]}
         self.pflag = False
+        self.names = ['r_prox_pin', 'r_distal_pin','l_prox_pin','l_distal_pin',]
     
     def set_goal_pose(self, gp):
         self.data['current_state']['goal_pose']['goal_pose'] = copy.deepcopy(gp)
