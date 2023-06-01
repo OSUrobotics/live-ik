@@ -11,7 +11,7 @@ out_dict = {}
 
 
 
-with open('data.csv', mode='r') as csv_file:
+with open('joint_angs.csv', mode='r') as csv_file:
     csvreader = csv.reader(csv_file)
     for i, row in enumerate(csvreader):
         if i == 0:

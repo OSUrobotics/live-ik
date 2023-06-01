@@ -36,20 +36,24 @@ class State_RW:
     
     def update_state(self, object_pos, fingertip_pos, fingerbase_pos, joint_angles):
         if self.pflag:
-            self.data['previous_state'][1:] = self.data['previous_state'][0:-1]
-            self.data['previous_state'][0] = self.data['current_state'].copy()
+            print("HERE PFLAG IS TRUE")
+            self.data['previous_state'][1:] = copy.deepcopy(self.data['previous_state'][0:-1])
+            self.data['previous_state'][0] = copy.deepcopy(self.data['current_state'])
             
         self.data['current_state']['obj_2']['pose'][0] = copy.deepcopy(object_pos)
         for k in self.data['current_state']['two_finger_gripper']['joint_angles'].keys():
             self.data['current_state']['two_finger_gripper']['joint_angles'][k] = joint_angles[k] # could also assign based on inds
-        self.data['current_state']['f1_pos'] = fingertip_pos[0:2]
-        self.data['current_state']['f2_pos'] = fingertip_pos[2:4]
-        self.data['current_state']['f1_base'] = fingerbase_pos[0:2]
-        self.data['current_state']['f2_base'] = fingerbase_pos[2:4]
+        self.data['current_state']['f1_pos'] = copy.deepcopy(fingertip_pos[0:2])
+        self.data['current_state']['f2_pos'] = copy.deepcopy(fingertip_pos[2:4])
+        self.data['current_state']['f1_base'] = copy.deepcopy(fingerbase_pos[0:2])
+        self.data['current_state']['f2_base'] = copy.deepcopy(fingerbase_pos[2:4])
+        self.data['current_state']['f1_ang'] = self.data['current_state']['two_finger_gripper']['joint_angles']['r_prox_pin'] + self.data['current_state']['two_finger_gripper']['joint_angles']['r_distal_pin']
+        self.data['current_state']['f2_ang'] = self.data['current_state']['two_finger_gripper']['joint_angles']['l_prox_pin'] + self.data['current_state']['two_finger_gripper']['joint_angles']['l_distal_pin']
         
         if not self.pflag:
-            self.data['previous_state'] = [self.data['current_state']] * 5
+            self.data['previous_state'] = [copy.deepcopy(self.data['current_state']),copy.deepcopy(self.data['current_state']),copy.deepcopy(self.data['current_state']),copy.deepcopy(self.data['current_state']),copy.deepcopy(self.data['current_state'])] 
             self.pflag = True
+
     
     def get_state(self):
         return self.data

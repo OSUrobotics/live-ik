@@ -1026,7 +1026,7 @@ if __name__ == "__main__":
     manager.left_sleeve_length = .05
     manager.right_dist_length = .072
     manager.right_sleeve_length = .050
-    manager.live_run(direction="N", hand_name="2v2", ratios="50.50_50.50_1.1_63", trial="3")
+    manager.live_run(direction="NW", hand_name="2v2", ratios="50.50_50.50_1.1_63", trial="3")
     #manager.test_contour_visualizer()
     
     # Uncomment this for live

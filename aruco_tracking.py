@@ -82,7 +82,7 @@ class Aruco_Track:
                 found_rgb = True
                 break
         if not found_rgb:
-            print("The demo requires Depth camera with Color sensor")
+            print("Requires depth camera with color sensor")
             exit(0)
 
         self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
@@ -345,10 +345,7 @@ class Aruco_Track:
             # Negative angle 
             angle = -angle - np.pi/4
             
-        return -angle
-
-
-
+        return -(angle - np.pi) #-angle # WAS THIS
 
     def start_save_frames_thread(self, save = False, save_delay = 0.0, live = True, live_delay = 0.0, drive="/media/kyle/Asterisk", folder="Data", hand = "blank", direction = 'N', trial = 1, contact = False):
         save_frame = threading.Thread(target=self.save_frames, args=(save, save_delay, live, live_delay, drive, folder, hand, direction, trial, contact,), daemon=True)
@@ -372,8 +369,6 @@ class Aruco_Track:
 
         #returns x,y
         return self.vtx[int(point[0])][int(point[1])][0], self.vtx[int(point[0])][int(point[1])][1]
-
-
 
     def live_tracking_analysis(self, color_image):
         """Runs Aruco marker detection on one image. Updates the global position variables.
@@ -417,6 +412,7 @@ class Aruco_Track:
    
    
     def object_pose(self, color_image, vtx, first_trial = False):
+
         self.colo = color_image.copy()
 
         gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
@@ -438,6 +434,24 @@ class Aruco_Track:
                 return np.array(pose), corners, ids
         return None, None, None
 
+    def aruco_poses(self, color_image, vtx, first_trial = False):
+        # For this we are assuming that the hand has ID=0 and object ID=1
+
+        self.colo = color_image.copy()
+
+        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        (corners, ids, rejected) = cv2.aruco.detectMarkers(gray, self.ARUCO_PARAMS["aruco_dict"],
+            parameters=self.ARUCO_PARAMS["aruco_params"])
+        
+        # We need there to be 2 aruco markers 
+        if len(ids)==2:
+            # IDs are ordered 0 upwards
+            self.first_trial = False
+            palm_pose = self.get_square_pose(corners[0][0])
+            object_pose = self.get_square_pose(corners[1][0])
+
+            return np.array(palm_pose), np.array(object_pose), corners, ids
+        return None, None, None, None
    
     def live_tracking_analysis_updated(self, color_image, vtx):
         """Runs Aruco marker detection on one image. Updates the global position variables.
@@ -522,7 +536,6 @@ class Aruco_Track:
         self.event.set()
     
     def live_plotting_thread(self):
-        print("here")
         z = threading.Thread(target=self.live_plotting, args=(), daemon=True)
         z.start()
 

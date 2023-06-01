@@ -275,6 +275,8 @@ class DDPGfD_RW():
                         state.extend([temp['r_prox_pin'],temp['r_distal_pin'],temp['l_prox_pin'],temp['l_distal_pin']])
                     elif key == 'gp':
                         state.extend(state_container['previous_state'][i]['goal_pose']['goal_pose'])
+                    elif key == 'fta':
+                        state.extend([state_container['previous_state'][i]['f1_ang'],state_container['previous_state'][i]['f2_ang']])
                     else:
                         raise Exception('key does not match list of known keys')
 
@@ -293,6 +295,8 @@ class DDPGfD_RW():
                 # print(state)
             elif key == 'gp':
                 state.extend(state_container['current_state']['goal_pose']['goal_pose'])
+            elif key == 'fta':
+                state.extend([state_container['f1_ang'],state_container['f2_ang']])
             else:
                 raise Exception('key does not match list of known keys')
         return state

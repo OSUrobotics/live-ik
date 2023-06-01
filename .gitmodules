@@ -1,3 +1,6 @@
 [submodule "hand-gen-IK"]
 	path = hand-gen-IK
 	url = https://github.com/Keeganfn/hand-gen-IK.git
+[submodule "dynamixel_control"]
+	path = dynamixel_control
+	url = https://github.com/OSUrobotics/dynamixel_control.git
